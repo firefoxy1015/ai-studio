@@ -760,7 +760,8 @@ createApp({
         time: new Date().toLocaleTimeString('zh', {hour:'2-digit',minute:'2-digit'}),
       })
       generations.value.unshift(card)
-      savePending()   // save immediately so refresh can restore the card
+      // Save immediately without relying on generations.value (Vue may not have committed the reactive mutation yet)
+      addToPending(card)
 
       await nextTick()
       scrollBottom()
@@ -945,6 +946,15 @@ createApp({
         .filter(g => g.loading)
         .map(g => ({ id:g.id, taskId:g.taskId||null, source:g.source, category:g.category, modelId:g.modelId, prompt:g.prompt, time:g.time }))
       localStorage.setItem(LS_PENDING_KEY, JSON.stringify(pending))
+    }
+
+    // Directly upserts a single card into LS without reading generations.value,
+    // used right after unshift() before Vue commits the reactive mutation.
+    function addToPending(card) {
+      const existing = JSON.parse(localStorage.getItem(LS_PENDING_KEY) || '[]')
+      const filtered = existing.filter(p => p.id !== card.id)
+      filtered.unshift({ id:card.id, taskId:card.taskId||null, source:card.source, category:card.category, modelId:card.modelId, prompt:card.prompt, time:card.time })
+      localStorage.setItem(LS_PENDING_KEY, JSON.stringify(filtered))
     }
 
     function saveWorks() {
