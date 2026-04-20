@@ -862,11 +862,9 @@ createApp({
           card.progress = d.progress || 0
           card.progressText = d.progress_text || d.status || '生成中...'
           if (d.is_final) {
-            console.log('[pollTask] final, error:', d.error, 'urls:', d.result_urls)
             if (d.error) { card.error = d.error }
             else { card.results = d.result_urls || [] }
             card.loading = false
-            console.log('[pollTask] card after:', {loading:card.loading, results:card.results, category:card.category})
             saveWorks()
             return
           }
@@ -935,10 +933,9 @@ createApp({
     const LS_CHAT_KEY = 'ai_studio_chat_v1'
 
     function saveWorks() {
-      const all = generations.value
-      const done = all.filter(g => !g.loading && g.results && g.results.length > 0)
-      console.log('[saveWorks] total:', all.length, 'completed:', done.length, done.map(g=>({id:g.id,results:g.results})))
-      const toSave = done.map(g => ({
+      const toSave = generations.value
+        .filter(g => !g.loading && g.results && g.results.length > 0)
+        .map(g => ({
           id: g.id,
           category: g.category,
           modelId: g.modelId,
@@ -947,15 +944,12 @@ createApp({
           time: g.time,
         }))
       localStorage.setItem(LS_KEY, JSON.stringify(toSave))
-      console.log('[saveWorks] saved to LS:', toSave.length, 'items')
     }
 
     function saveChat() {
-      const msgs = chatMessages.value.map(m => ({ role: m.role, content: m.content }))
-      console.log('[saveChat] saving', msgs.length, 'messages, model:', selectedModelId.value)
       localStorage.setItem(LS_CHAT_KEY, JSON.stringify({
         model: selectedModelId.value,
-        messages: msgs,
+        messages: chatMessages.value.map(m => ({ role: m.role, content: m.content })),
         system: chatSystem.value || '',
       }))
     }
@@ -970,23 +964,21 @@ createApp({
       // Load works
       try {
         const saved = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
-        console.log('[onMounted] loading works from LS:', saved.length, 'items')
         saved.forEach(w => {
           if (!generations.value.find(g => g.id === w.id)) {
             generations.value.push({ ...w, loading: false, progress: 100, error: null })
           }
         })
-      } catch(e) { console.error('[onMounted] works load error:', e) }
+      } catch(e) {}
       // Load chat
       try {
         const saved = JSON.parse(localStorage.getItem(LS_CHAT_KEY) || 'null')
-        console.log('[onMounted] loading chat from LS:', saved?.messages?.length, 'msgs, model:', saved?.model)
         if (saved) {
           if (saved.model) selectedModelId.value = saved.model
           if (saved.messages) chatMessages.value = saved.messages
           if (saved.system) chatSystem.value = saved.system
         }
-      } catch(e) { console.error('[onMounted] chat load error:', e) }
+      } catch(e) {}
     })
 
     return {
