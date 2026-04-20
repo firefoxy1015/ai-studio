@@ -203,6 +203,9 @@ async def generate(req: GenerateRequest):
 
     task_id = None
     for v in d.get("data", {}).values():
+        if isinstance(v, list) and v:
+            task_id = str(v[0]).strip()
+            break
         if isinstance(v, (int, str)) and str(v).strip():
             task_id = str(v).strip()
             break

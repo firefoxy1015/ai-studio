@@ -470,7 +470,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </div>
 
 <script>
-const { createApp, ref, computed, reactive, nextTick, onMounted, watch } = Vue
+const { createApp, ref, computed, reactive, nextTick, onMounted, watch, watchEffect } = Vue
 
 // ── Model definitions ─────────────────────────────────────────────────────
 
@@ -959,6 +959,11 @@ createApp({
         system: chatSystem.value || '',
       }))
     }
+
+    // Backup saver: fires whenever completedWorks changes
+    watch(completedWorks, (val) => {
+      if (val.length > 0) saveWorks()
+    }, { deep: true })
 
     onMounted(() => {
       loadBalance()
