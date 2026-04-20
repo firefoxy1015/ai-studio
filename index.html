@@ -935,15 +935,22 @@ createApp({
     function saveWorks() {
       const toSave = generations.value
         .filter(g => !g.loading && g.results && g.results.length > 0)
-        .map(g => ({ id:g.id, category:g.category, modelId:g.modelId, prompt:g.prompt, results:g.results, time:g.time }))
+        .map(g => ({
+          id: g.id,
+          category: g.category,
+          modelId: g.modelId,
+          prompt: g.prompt,
+          results: Array.from(g.results),
+          time: g.time,
+        }))
       localStorage.setItem(LS_KEY, JSON.stringify(toSave))
     }
 
     function saveChat() {
       localStorage.setItem(LS_CHAT_KEY, JSON.stringify({
         model: selectedModelId.value,
-        messages: chatMessages.value,
-        system: chatSystem.value,
+        messages: chatMessages.value.map(m => ({ role: m.role, content: m.content })),
+        system: chatSystem.value || '',
       }))
     }
 
