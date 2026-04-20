@@ -241,15 +241,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
           </div>
           <!-- Results -->
           <div v-if="g.results && g.results.length" class="gen-results">
-            <template v-if="activeCategory==='image'">
+            <template v-if="g.category==='image'">
               <img v-for="url in g.results" :key="url" :src="url" class="gen-img"
                    @click="openLightbox(url)" loading="lazy" />
             </template>
-            <template v-else-if="activeCategory==='video'">
+            <template v-else-if="g.category==='video'">
               <video v-for="url in g.results" :key="url" :src="url"
                      class="gen-video" controls></video>
             </template>
-            <template v-else-if="activeCategory==='music'">
+            <template v-else-if="g.category==='music'">
               <audio v-for="url in g.results" :key="url" :src="url"
                      class="gen-audio" controls></audio>
             </template>
@@ -262,9 +262,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
           <div v-if="!g.loading" class="gen-actions">
             <button class="btn-sm" @click="rerun(g)">🔄 再次生成</button>
             <template v-if="g.results && g.results.length">
-              <a v-for="url in g.results" :key="url" :href="url" download target="_blank">
-                <button class="btn-sm">⬇ 下载</button>
-              </a>
+              <button v-for="(url,ui) in g.results" :key="url" class="btn-sm"
+                      @click="window.open(url,'_blank')">⬇ 下载{{ g.results.length>1 ? ui+1 : '' }}</button>
+              <button v-for="(url,ui) in g.results" :key="'c'+url" class="btn-sm"
+                      @click="navigator.clipboard.writeText(url).then(()=>alert('链接已复制'))">
+                🔗 复制链接{{ g.results.length>1 ? ui+1 : '' }}</button>
             </template>
             <button class="btn-sm" style="margin-left:auto" @click="generations.splice(gi,1)">删除</button>
           </div>
@@ -601,6 +603,7 @@ createApp({
       const card = reactive({
         id: Date.now(),
         modelId: selectedModelId.value,
+        category: activeCategory.value,
         prompt,
         refs: [...refs.value],
         params,
