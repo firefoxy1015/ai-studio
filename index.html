@@ -498,34 +498,6 @@ const IMAGE_MODELS = [
 ]
 
 const VIDEO_MODELS = [
-  // DATA999
-  { id:'kling-v3-omni-shouweizhen', name:'可灵V3 首尾帧',   desc:'⭐首尾帧主力，有声视频，质量最强', icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'data999',
-    refMode:'first_last', hasDuration:true, hasMode:true, hasRatio:false },
-  { id:'kling-v3-video',            name:'可灵V3 Video',      desc:'文生/图生视频，支持首帧', icon:'◈', bg:'linear-gradient(135deg,#0e7490,#164e63)', source:'data999',
-    refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
-  { id:'pixverse-v6-shouweizhen',   name:'Pix V6 首尾帧',     desc:'V6多模态，支持首尾帧', icon:'◆', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'data999',
-    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
-  { id:'pixverse-c1-shouweizhen',   name:'Pix C1 首尾帧',     desc:'动态特效，首尾帧', icon:'◆', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'data999',
-    refMode:'first_last', hasDuration:true, hasMode:false, hasRatio:false },
-  { id:'kwvideo-v2',                name:'Seedance 2.0',       desc:'首尾帧+全能参考，按Token计费', icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)', source:'data999',
-    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
-  { id:'doubao-seedance-1-5-pro-251215', name:'即梦 3.5 Pro', desc:'⭐音画质最佳，支持首尾帧', icon:'✦', bg:'linear-gradient(135deg,#d97706,#78350f)', source:'data999',
-    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
-  { id:'veo3.1',                    name:'Veo 3.1',            desc:'谷歌出品，自带BGM，有声视频', icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)', source:'data999',
-    refMode:'optional', hasDuration:false, hasMode:false, hasRatio:true },
-  { id:'veo3.1-lite',               name:'Veo 3.1 Lite',       desc:'Veo轻量版，性价比最高', icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)', source:'data999',
-    refMode:'optional', hasDuration:false, hasMode:false, hasRatio:true },
-  { id:'grok-video-3',              name:'Grok Video 3',       desc:'快速首帧视频', icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'data999',
-    refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
-  { id:'grok-video-3-plus',         name:'Grok Video 3+',      desc:'最长30秒长视频', icon:'⚡', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'data999',
-    refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
-  { id:'viduq3',                    name:'Vidu Q3',            desc:'最长16秒，高质量', icon:'◉', bg:'linear-gradient(135deg,#ec4899,#831843)', source:'data999',
-    refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
-  // Bytefor
-  { id:'Seedance 2.0 Fast',         name:'Seedance 2.0 Fast',  desc:'快速版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'bytefor',
-    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
-  { id:'Seedance 2.0',              name:'Seedance 2.0',       desc:'高质量版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0e7490,#164e63)', source:'bytefor',
-    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
   // Deepwl（同步返回，无需轮询）
   { id:'veo_3_1-fast',              name:'Veo 3.1 Fast ⚡',   desc:'谷歌Veo最快版，自带BGM', icon:'✿', bg:'linear-gradient(135deg,#1d4ed8,#1e3a8a)', source:'deepwl',
     refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
@@ -545,6 +517,34 @@ const VIDEO_MODELS = [
     refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
   { id:'sora-2',                    name:'Sora 2 ⚡',         desc:'OpenAI Sora第二代', icon:'◉', bg:'linear-gradient(135deg,#10b981,#065f46)', source:'deepwl',
     refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  // DATA999
+  { id:'kling-v3-omni-shouweizhen', name:'可灵V3 首尾帧',   desc:'⭐首尾帧主力，有声视频，质量最强', icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'data999',
+    refMode:'first_last', hasDuration:true, hasMode:true, hasRatio:false },
+  { id:'kling-v3-video',            name:'可灵V3 Video',      desc:'文生/图生视频，支持首帧', icon:'◈', bg:'linear-gradient(135deg,#0e7490,#164e63)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
+  { id:'pixverse-v6-shouweizhen',   name:'Pix V6 首尾帧',     desc:'V6多模态，支持首尾帧', icon:'◆', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'pixverse-c1-shouweizhen',   name:'Pix C1 首尾帧',     desc:'动态特效，首尾帧', icon:'◆', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'data999',
+    refMode:'first_last', hasDuration:true, hasMode:false, hasRatio:false },
+  { id:'kwvideo-v2',                name:'Seedance 2.0',       desc:'首尾帧+全能参考，按Token计费', icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'doubao-seedance-1-5-pro-251215', name:'即梦 3.5 Pro', desc:'⭐音画质最佳，支持首尾帧', icon:'✦', bg:'linear-gradient(135deg,#d97706,#78350f)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'veo3.1',                    name:'Veo 3.1',            desc:'谷歌出品，自带BGM，有声视频', icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)', source:'data999',
+    refMode:'optional', hasDuration:false, hasMode:false, hasRatio:true },
+  { id:'veo3.1-lite',               name:'Veo 3.1 Lite',       desc:'Veo轻量版，性价比最高', icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)', source:'data999',
+    refMode:'optional', hasDuration:false, hasMode:false, hasRatio:true },
+  { id:'grok-video-3-data999', apiId:'grok-video-3', name:'Grok Video 3', desc:'快速首帧视频', icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'data999',
+    refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'grok-video-3-plus',         name:'Grok Video 3+',      desc:'最长30秒长视频', icon:'⚡', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'data999',
+    refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'viduq3',                    name:'Vidu Q3',            desc:'最长16秒，高质量', icon:'◉', bg:'linear-gradient(135deg,#ec4899,#831843)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
+  // Bytefor
+  { id:'Seedance 2.0 Fast',         name:'Seedance 2.0 Fast',  desc:'快速版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'bytefor',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'Seedance 2.0',              name:'Seedance 2.0',       desc:'高质量版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0e7490,#164e63)', source:'bytefor',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
 ]
 
 const MUSIC_MODELS = [
@@ -789,7 +789,7 @@ createApp({
         const resp = await fetch('/api/generate', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ source: card.source, model: m.id, prompt, params })
+          body: JSON.stringify({ source: card.source, model: m.apiId || m.id, prompt, params })
         })
         if (!resp.ok) {
           const err = await resp.json().catch(()=>({detail:'未知错误'}))
