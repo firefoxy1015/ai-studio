@@ -729,6 +729,7 @@ createApp({
       } finally {
         isLoading.value = false
         scrollBottom()
+        saveChat()
       }
     }
 
@@ -864,6 +865,7 @@ createApp({
             if (d.error) { card.error = d.error }
             else { card.results = d.result_urls || [] }
             card.loading = false
+            saveWorks()
             return
           }
         } catch(e) {
@@ -928,6 +930,7 @@ createApp({
 
     // ── localStorage persistence ──────────────────────────
     const LS_KEY = 'ai_studio_works_v1'
+    const LS_CHAT_KEY = 'ai_studio_chat_v1'
 
     function saveWorks() {
       const toSave = generations.value
@@ -936,10 +939,17 @@ createApp({
       localStorage.setItem(LS_KEY, JSON.stringify(toSave))
     }
 
-    watch(generations, saveWorks, { deep: true })
+    function saveChat() {
+      localStorage.setItem(LS_CHAT_KEY, JSON.stringify({
+        model: selectedModelId.value,
+        messages: chatMessages.value,
+        system: chatSystem.value,
+      }))
+    }
 
     onMounted(() => {
       loadBalance()
+      // Load works
       try {
         const saved = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
         saved.forEach(w => {
@@ -947,6 +957,15 @@ createApp({
             generations.value.push({ ...w, loading: false, progress: 100, error: null })
           }
         })
+      } catch(e) {}
+      // Load chat
+      try {
+        const saved = JSON.parse(localStorage.getItem(LS_CHAT_KEY) || 'null')
+        if (saved) {
+          if (saved.model) selectedModelId.value = saved.model
+          if (saved.messages) chatMessages.value = saved.messages
+          if (saved.system) chatSystem.value = saved.system
+        }
       } catch(e) {}
     })
 
