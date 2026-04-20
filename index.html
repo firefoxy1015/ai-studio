@@ -839,8 +839,15 @@ createApp({
           delete p.aspect_ratio
           if (p.images) p.images = refs.value.map(r=>r.url)
         }
-        // Veo needs enhance_prompt
-        if (m.id === 'veo3.1' || m.id === 'veo3.1-lite') p.enhance_prompt = true
+        // Veo params
+        if (m.id === 'veo3.1' || m.id === 'veo3.1-4k') {
+          p.generation_mode = 'fast'
+          p.enhance_prompt = true
+        }
+        if (m.id === 'veo3.1-lite') {
+          p.quality = '4k'
+          p.enhance_prompt = true
+        }
         // kwvideo needs version
         if (m.id === 'kwvideo-v2') { p.version = '标准'; p.aspect_ratio = paramRatio.value }
         // viduq3 needs model_variant and resolution
