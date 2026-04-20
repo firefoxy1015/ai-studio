@@ -760,6 +760,7 @@ createApp({
         time: new Date().toLocaleTimeString('zh', {hour:'2-digit',minute:'2-digit'}),
       })
       generations.value.unshift(card)
+      savePending()   // save immediately so refresh can restore the card
 
       await nextTick()
       scrollBottom()
@@ -777,7 +778,7 @@ createApp({
         const {task_id, source} = await resp.json()
         card.taskId = task_id
         card.progressText = '排队中...'
-        savePending()
+        savePending()   // update with real taskId
         await pollTask(card, task_id, source)
       } catch(e) {
         card.error = e.message
@@ -941,8 +942,8 @@ createApp({
 
     function savePending() {
       const pending = generations.value
-        .filter(g => g.loading && g.taskId)
-        .map(g => ({ id:g.id, taskId:g.taskId, source:g.source, category:g.category, modelId:g.modelId, prompt:g.prompt, time:g.time }))
+        .filter(g => g.loading)
+        .map(g => ({ id:g.id, taskId:g.taskId||null, source:g.source, category:g.category, modelId:g.modelId, prompt:g.prompt, time:g.time }))
       localStorage.setItem(LS_PENDING_KEY, JSON.stringify(pending))
     }
 
@@ -991,10 +992,14 @@ createApp({
           const card = reactive({
             id: p.id, taskId: p.taskId, source: p.source,
             category: p.category, modelId: p.modelId, prompt: p.prompt, time: p.time,
-            loading: true, progress: 0, progressText: '恢复中...', results: [], error: null,
+            loading: p.taskId ? true : false,
+            progress: 0,
+            progressText: p.taskId ? '恢复轮询中...' : '',
+            results: [],
+            error: p.taskId ? null : '提交失败，请重新生成',
           })
           generations.value.push(card)
-          pollTask(card, p.taskId, p.source)
+          if (p.taskId) pollTask(card, p.taskId, p.source)
         })
       } catch(e) {}
       // Load chat
