@@ -205,11 +205,16 @@ async def generate(req: GenerateRequest):
         async with httpx.AsyncClient(timeout=300) as client:
             r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
         d = r.json()
+        if d.get("error"):
+            raise HTTPException(400, detail=d["error"].get("message", str(d["error"])))
         content = d.get("choices", [{}])[0].get("message", {}).get("content", "")
-        # Extract URLs from markdown links or plain URLs
-        urls = re.findall(r'\[.*?\]\((https?://[^\)]+)\)', content)
+        # Prefer video URLs, fall back to any media URL
+        video_exts = r'\.(?:mp4|webm|mov|m3u8)'
+        urls = re.findall(rf'https?://[^\s\)\"\']+{video_exts}[^\s\)\"\']*', content)
         if not urls:
-            urls = re.findall(r'(https?://\S+\.(?:mp4|webm|mov|gif|jpg|jpeg|png|webp))', content)
+            # try markdown links for any extension
+            all_links = re.findall(r'(?<!!)\[.*?\]\((https?://[^\)]+)\)', content)
+            urls = all_links
         if not urls:
             raise HTTPException(400, detail=content or "deepwl 未返回媒体链接")
         return {"result_urls": urls, "source": "deepwl"}
