@@ -775,11 +775,14 @@ createApp({
           throw new Error(err.detail || JSON.stringify(err))
         }
         const {task_id, source} = await resp.json()
+        card.taskId = task_id
         card.progressText = '排队中...'
+        savePending()
         await pollTask(card, task_id, source)
       } catch(e) {
         card.error = e.message
         card.loading = false
+        savePending()
       } finally {
         isLoading.value = false
       }
@@ -865,6 +868,7 @@ createApp({
             if (d.error) { card.error = d.error }
             else { card.results = d.result_urls || [] }
             card.loading = false
+            savePending()
             saveWorks()
             return
           }
@@ -874,6 +878,7 @@ createApp({
       }
       card.error = '生成超时（2小时）'
       card.loading = false
+      savePending()
     }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -932,6 +937,15 @@ createApp({
     const LS_KEY = 'ai_studio_works_v1'
     const LS_CHAT_KEY = 'ai_studio_chat_v1'
 
+    const LS_PENDING_KEY = 'ai_studio_pending_v1'
+
+    function savePending() {
+      const pending = generations.value
+        .filter(g => g.loading && g.taskId)
+        .map(g => ({ id:g.id, taskId:g.taskId, source:g.source, category:g.category, modelId:g.modelId, prompt:g.prompt, time:g.time }))
+      localStorage.setItem(LS_PENDING_KEY, JSON.stringify(pending))
+    }
+
     function saveWorks() {
       const toSave = generations.value
         .filter(g => !g.loading && g.results && g.results.length > 0)
@@ -968,6 +982,19 @@ createApp({
           if (!generations.value.find(g => g.id === w.id)) {
             generations.value.push({ ...w, loading: false, progress: 100, error: null })
           }
+        })
+      } catch(e) {}
+      // Resume pending tasks
+      try {
+        const pending = JSON.parse(localStorage.getItem(LS_PENDING_KEY) || '[]')
+        pending.forEach(p => {
+          const card = reactive({
+            id: p.id, taskId: p.taskId, source: p.source,
+            category: p.category, modelId: p.modelId, prompt: p.prompt, time: p.time,
+            loading: true, progress: 0, progressText: '恢复中...', results: [], error: null,
+          })
+          generations.value.push(card)
+          pollTask(card, p.taskId, p.source)
         })
       } catch(e) {}
       // Load chat
