@@ -148,6 +148,27 @@ async def chat(req: ChatRequest):
     )
 
 
+@app.post("/api/chat/sync")
+async def chat_sync(req: ChatRequest):
+    """Non-streaming chat — collects full response and returns JSON."""
+    if req.model in CLAUDE_MODELS:
+        gen = _stream_claude(req)
+    elif req.model in GEMINI_MODELS:
+        gen = _stream_gemini(req)
+    else:
+        gen = _stream_openai(req)
+    full = ""
+    async for chunk in gen:
+        if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+            try:
+                import json as _json
+                d = _json.loads(chunk[6:].strip())
+                full += d.get("text", "")
+            except Exception:
+                pass
+    return {"text": full}
+
+
 @app.post("/api/generate")
 async def generate(req: GenerateRequest):
     params = dict(req.params or {})
