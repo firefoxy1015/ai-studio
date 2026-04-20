@@ -14,6 +14,8 @@ DATA999_KEY = "sk-37b060cd778ee075ac3388fe421c6df1cc367f591238195c"
 DATA999_BASE = "https://api.ai6700.com"
 BYTEFOR_KEY = "sk-4afb143170cc4bb996d7533939efce4c8c02a3a5070e493d"
 BYTEFOR_BASE = "https://open.bytefor.com"
+DEEPWL_KEY = "sk-hUviZm3xQzam0EaaA9622c041aA249CbB4924c929c9805Aa"
+DEEPWL_BASE = "https://zx1.deepwl.net"
 
 CLAUDE_MODELS = {
     "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
@@ -41,7 +43,7 @@ class ChatRequest(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    source: str = "data999"   # 'data999' | 'bytefor'
+    source: str = "data999"   # 'data999' | 'bytefor' | 'deepwl'
     model: str
     prompt: str
     params: Optional[Dict[str, Any]] = {}
@@ -172,6 +174,25 @@ async def chat_sync(req: ChatRequest):
 @app.post("/api/generate")
 async def generate(req: GenerateRequest):
     params = dict(req.params or {})
+
+    if req.source == "deepwl":
+        headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
+        body = {
+            "model": req.model,
+            "messages": [{"role": "user", "content": req.prompt}],
+            "stream": False,
+        }
+        async with httpx.AsyncClient(timeout=300) as client:
+            r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
+        d = r.json()
+        content = d.get("choices", [{}])[0].get("message", {}).get("content", "")
+        # Extract URLs from markdown links or plain URLs
+        urls = re.findall(r'\[.*?\]\((https?://[^\)]+)\)', content)
+        if not urls:
+            urls = re.findall(r'(https?://\S+\.(?:mp4|webm|mov|gif|jpg|jpeg|png|webp))', content)
+        if not urls:
+            raise HTTPException(400, detail=content or "deepwl 未返回媒体链接")
+        return {"result_urls": urls, "source": "deepwl"}
 
     if req.source == "bytefor":
         headers = {"Authorization": f"Bearer {BYTEFOR_KEY}", "Content-Type": "application/json"}
