@@ -144,6 +144,39 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .system-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;resize:none;outline:none;height:70px;font-family:inherit}
 .system-input:focus{border-color:var(--accent)}
 .section-label{font-size:11px;color:var(--muted);padding:8px 8px 4px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+
+/* ── Works Tab ───────────────────────────────────────── */
+.works-sidebar{flex:1;overflow-y:auto;padding:8px}
+.works-stat{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:6px}
+.works-stat-label{font-size:12px;color:var(--muted)}
+.works-stat-val{font-size:14px;font-weight:700;color:var(--text)}
+.works-filter{display:flex;flex-direction:column;gap:4px;padding:6px 0}
+.works-filter-btn{padding:7px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;text-align:left;transition:.15s;display:flex;align-items:center;justify-content:space-between}
+.works-filter-btn:hover{background:var(--hover);color:var(--text)}
+.works-filter-btn.active{background:linear-gradient(135deg,rgba(108,92,231,.2),rgba(116,185,255,.1));border-color:rgba(108,92,231,.4);color:#fff}
+.works-count-badge{font-size:10px;padding:1px 6px;border-radius:99px;background:rgba(108,92,231,.3);color:#a29bfe}
+
+.works-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:20px}
+.work-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:.15s}
+.work-card:hover{border-color:rgba(108,92,231,.4);transform:translateY(-2px)}
+.work-card-media{position:relative;background:#0a0a14}
+.work-card-media img{width:100%;aspect-ratio:1;object-fit:cover;display:block;cursor:pointer}
+.work-card-media video{width:100%;max-height:200px;display:block}
+.work-card-media audio{width:100%;padding:12px}
+.work-cat-badge{position:absolute;top:8px;left:8px;font-size:10px;padding:2px 7px;border-radius:99px;font-weight:600;backdrop-filter:blur(4px)}
+.badge-image{background:rgba(253,203,110,.3);color:#fdcb6e;border:1px solid rgba(253,203,110,.4)}
+.badge-video{background:rgba(0,206,201,.3);color:#00cec9;border:1px solid rgba(0,206,201,.4)}
+.badge-music{background:rgba(232,67,147,.3);color:#fd79a8;border:1px solid rgba(232,67,147,.4)}
+.work-card-body{padding:10px 12px}
+.work-card-prompt{font-size:12px;color:var(--text);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px}
+.work-card-meta{display:flex;align-items:center;justify-content:space-between}
+.work-card-model{font-size:11px;color:var(--muted)}
+.work-card-time{font-size:11px;color:var(--muted)}
+.work-card-actions{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--border)}
+.works-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:12px}
+.works-topbar{display:flex;align-items:center;gap:8px}
+.works-clear-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+.works-clear-btn:hover{border-color:var(--error);color:var(--error)}
 </style>
 </head>
 <body>
@@ -170,7 +203,26 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <textarea class="system-input" v-model="chatSystem" placeholder="可选：设置AI角色..."></textarea>
     </div>
 
-    <div class="model-list">
+    <!-- Works sidebar -->
+    <template v-if="activeCategory==='works'">
+      <div class="works-sidebar">
+        <div class="section-label" style="padding:10px 2px 8px">筛选</div>
+        <div class="works-filter">
+          <button v-for="f in worksFilters" :key="f.id"
+                  :class="['works-filter-btn', {active: worksFilter===f.id}]"
+                  @click="worksFilter=f.id">
+            {{ f.label }}
+            <span class="works-count-badge">{{ worksCount(f.id) }}</span>
+          </button>
+        </div>
+        <div class="section-label" style="padding:14px 2px 8px">统计</div>
+        <div class="works-stat"><span class="works-stat-label">图片</span><span class="works-stat-val">{{ worksCount('image') }}</span></div>
+        <div class="works-stat"><span class="works-stat-label">视频</span><span class="works-stat-val">{{ worksCount('video') }}</span></div>
+        <div class="works-stat"><span class="works-stat-label">音乐</span><span class="works-stat-val">{{ worksCount('music') }}</span></div>
+      </div>
+    </template>
+
+    <div class="model-list" v-else>
       <div v-for="m in currentModels" :key="m.id"
            :class="['model-item', {active: selectedModelId===m.id}]"
            @click="selectModel(m.id)">
@@ -193,10 +245,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <!-- Top bar -->
     <div class="topbar">
       <div class="topbar-model">
-        <span v-if="selectedModel">{{ selectedModel.icon }} {{ selectedModel.name }}</span>
-        <span v-else style="color:var(--muted)">请选择模型</span>
+        <template v-if="activeCategory==='works'">
+          <div class="works-topbar">
+            <span>🎨 我的作品</span>
+            <span style="font-size:12px;color:var(--muted);font-weight:400">共 {{ worksCount('all') }} 件</span>
+          </div>
+        </template>
+        <template v-else>
+          <span v-if="selectedModel">{{ selectedModel.icon }} {{ selectedModel.name }}</span>
+          <span v-else style="color:var(--muted)">请选择模型</span>
+        </template>
       </div>
       <div class="topbar-hint" v-if="activeCategory==='chat'">Enter 发送 · Shift+Enter 换行</div>
+      <div class="topbar-hint" v-else-if="activeCategory==='works'">
+        <button class="works-clear-btn" @click="clearWorks">🗑 清空记录</button>
+      </div>
       <div class="topbar-hint" v-else>图片/视频生成需要数分钟，请耐心等待</div>
     </div>
 
@@ -218,13 +281,52 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         </div>
       </template>
 
+      <!-- WORKS mode -->
+      <template v-else-if="activeCategory==='works'">
+        <div v-if="worksCount('all')===0" class="works-empty">
+          <div class="empty-icon">🎨</div>
+          <div class="empty-text">还没有作品，去生成一些吧</div>
+        </div>
+        <div v-else class="works-grid">
+          <div v-for="(g, gi) in filteredWorks" :key="g.id" class="work-card">
+            <div class="work-card-media">
+              <template v-if="g.category==='image'">
+                <img :src="g.results[0]" @click="openLightbox(g.results[0])" loading="lazy" />
+              </template>
+              <template v-else-if="g.category==='video'">
+                <video :src="g.results[0]" controls></video>
+              </template>
+              <template v-else-if="g.category==='music'">
+                <audio :src="g.results[0]" controls></audio>
+              </template>
+              <span :class="['work-cat-badge','badge-'+g.category]">
+                {{ g.category==='image'?'图片':g.category==='video'?'视频':'音乐' }}
+              </span>
+            </div>
+            <div class="work-card-body">
+              <div class="work-card-prompt">{{ g.prompt }}</div>
+              <div class="work-card-meta">
+                <span class="work-card-model">{{ modelById(g.modelId)?.name || g.modelId }}</span>
+                <span class="work-card-time">{{ g.time }}</span>
+              </div>
+            </div>
+            <div class="work-card-actions">
+              <button class="btn-sm" @click="window.open(g.results[0],'_blank')">⬇ 下载</button>
+              <button class="btn-sm" @click="navigator.clipboard.writeText(g.results[0]).then(()=>alert('链接已复制'))">🔗 复制</button>
+              <button class="btn-sm" @click="rerun(g)">🔄 重做</button>
+              <button class="btn-sm" style="margin-left:auto" @click="removeWork(g.id)">删除</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- GENERATION mode -->
       <template v-else>
-        <div v-if="generations.length===0" class="empty-state">
+        <div v-if="currentGenerations.length===0" class="empty-state">
           <div class="empty-icon">{{ activeCategory==='image'?'🖼️':activeCategory==='video'?'🎬':'🎵' }}</div>
           <div class="empty-text">在下方输入描述，点击发送开始生成</div>
         </div>
-        <div v-for="(g, gi) in generations" :key="g.id" class="gen-card">
+        <div v-for="(g, gi) in currentGenerations" :key="g.id" class="gen-card">
           <div class="gen-card-header">
             <div class="model-icon" :style="{background: modelById(g.modelId)?.bg||'#333', fontSize:'13px', width:'28px', height:'28px'}">
               {{ modelById(g.modelId)?.icon||'🤖' }}
@@ -268,14 +370,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
                       @click="navigator.clipboard.writeText(url).then(()=>alert('链接已复制'))">
                 🔗 复制链接{{ g.results.length>1 ? ui+1 : '' }}</button>
             </template>
-            <button class="btn-sm" style="margin-left:auto" @click="generations.splice(gi,1)">删除</button>
+            <button class="btn-sm" style="margin-left:auto" @click="removeGeneration(g.id)">删除</button>
           </div>
         </div>
       </template>
     </div>
 
     <!-- ── Bottom Input ── -->
-    <div class="input-area">
+    <div class="input-area" v-if="activeCategory!=='works'">
       <!-- Reference chips -->
       <div class="input-refs" v-if="activeCategory!=='chat' && (refs.length || true)">
         <div v-for="(ref,ri) in refs" :key="ri" class="ref-chip">
@@ -368,7 +470,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </div>
 
 <script>
-const { createApp, ref, computed, reactive, nextTick, onMounted } = Vue
+const { createApp, ref, computed, reactive, nextTick, onMounted, watch } = Vue
 
 // ── Model definitions ─────────────────────────────────────────────────────
 
@@ -479,12 +581,21 @@ createApp({
     const refModalType = ref('参考图')
     const fileInput = ref(null)
     const lightboxUrl = ref(null)
+    const worksFilter = ref('all')
 
     const categories = [
       { id:'chat', label:'文字' },
       { id:'image', label:'图片' },
       { id:'video', label:'视频' },
       { id:'music', label:'音乐' },
+      { id:'works', label:'🎨作品' },
+    ]
+
+    const worksFilters = [
+      { id:'all', label:'全部作品' },
+      { id:'image', label:'🖼 图片' },
+      { id:'video', label:'🎬 视频' },
+      { id:'music', label:'🎵 音乐' },
     ]
 
     const categoryLabel = computed(() => ({chat:'对话',image:'图片',video:'视频',music:'音乐'}[activeCategory.value]))
@@ -524,9 +635,41 @@ createApp({
       return '描述想要生成的音乐风格和氛围...'
     })
 
+    // Computed: generations for current tab (excluding works)
+    const currentGenerations = computed(() =>
+      generations.value.filter(g => g.category === activeCategory.value)
+    )
+
+    // Completed works (for 我的作品 tab)
+    const completedWorks = computed(() =>
+      generations.value.filter(g => !g.loading && g.results && g.results.length > 0)
+    )
+
+    const filteredWorks = computed(() => {
+      if (worksFilter.value === 'all') return completedWorks.value
+      return completedWorks.value.filter(g => g.category === worksFilter.value)
+    })
+
+    function worksCount(cat) {
+      if (cat === 'all') return completedWorks.value.length
+      return completedWorks.value.filter(g => g.category === cat).length
+    }
+
+    function removeGeneration(id) {
+      const i = generations.value.findIndex(g => g.id === id)
+      if (i !== -1) generations.value.splice(i, 1)
+    }
+
+    function removeWork(id) { removeGeneration(id) }
+
+    function clearWorks() {
+      if (!confirm('确定清空所有作品记录？')) return
+      generations.value = generations.value.filter(g => g.loading)
+    }
+
     function switchCategory(cat) {
       activeCategory.value = cat
-      // Auto-select first model
+      if (cat === 'works') return
       const models = cat==='chat'?CHAT_MODELS:cat==='image'?IMAGE_MODELS:cat==='video'?VIDEO_MODELS:MUSIC_MODELS
       if (models.length) selectedModelId.value = models[0].id
       refs.value = []
@@ -783,18 +926,40 @@ createApp({
       }
     }
 
+    // ── localStorage persistence ──────────────────────────
+    const LS_KEY = 'ai_studio_works_v1'
+
+    function saveWorks() {
+      const toSave = generations.value
+        .filter(g => !g.loading && g.results && g.results.length > 0)
+        .map(g => ({ id:g.id, category:g.category, modelId:g.modelId, prompt:g.prompt, results:g.results, time:g.time }))
+      localStorage.setItem(LS_KEY, JSON.stringify(toSave))
+    }
+
+    watch(generations, saveWorks, { deep: true })
+
     onMounted(() => {
       loadBalance()
+      try {
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
+        saved.forEach(w => {
+          if (!generations.value.find(g => g.id === w.id)) {
+            generations.value.push({ ...w, loading: false, progress: 100, error: null })
+          }
+        })
+      } catch(e) {}
     })
 
     return {
       activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
-      chatMessages, chatStreaming, chatSystem, isLoading, generations, promptText, lyricsText,
-      refs, paramRatio, paramDuration, paramMode, paramMusicType, ratioOptions, durationOptions,
-      balanceText, historyEl, promptEl, showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
+      chatMessages, chatStreaming, chatSystem, isLoading, generations, currentGenerations,
+      completedWorks, filteredWorks, worksFilter, worksFilters, worksCount,
+      promptText, lyricsText, refs, paramRatio, paramDuration, paramMode, paramMusicType,
+      ratioOptions, durationOptions, balanceText, historyEl, promptEl,
+      showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
       refTypeOptions, inputPlaceholder,
       switchCategory, selectModel, modelById, submit, rerun, addRef, onFileSelected, openLightbox,
-      autoResize, renderMd,
+      autoResize, renderMd, removeGeneration, removeWork, clearWorks,
     }
   }
 }).mount('#app')
