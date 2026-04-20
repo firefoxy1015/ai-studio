@@ -86,16 +86,19 @@ async def _stream_claude(req: ChatRequest):
     yield "data: [DONE]\n\n"
 
 
-async def _stream_openai(req: ChatRequest):
-    headers = {"Authorization": f"Bearer {DATA999_KEY}", "Content-Type": "application/json"}
+async def _stream_openai_from(req: ChatRequest, base: str, key: str):
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     msgs: list = []
     if req.system:
         msgs.append({"role": "system", "content": req.system})
     msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
     body = {"model": req.model, "stream": True, "messages": msgs}
+    got_text = False
     async with httpx.AsyncClient(timeout=120) as client:
-        async with client.stream("POST", f"{DATA999_BASE}/v1/chat/completions",
+        async with client.stream("POST", f"{base}/v1/chat/completions",
                                   headers=headers, json=body) as r:
+            if r.status_code >= 400:
+                raise Exception(f"HTTP {r.status_code}")
             async for line in r.aiter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -106,10 +109,29 @@ async def _stream_openai(req: ChatRequest):
                     d = json.loads(s)
                     text = d["choices"][0]["delta"].get("content", "")
                     if text:
+                        got_text = True
                         yield f"data: {json.dumps({'text': text})}\n\n"
                 except Exception:
                     pass
-    yield "data: [DONE]\n\n"
+    if not got_text:
+        raise Exception("empty response")
+
+
+async def _stream_openai(req: ChatRequest):
+    """Try deepwl first, fall back to data999 on error."""
+    buf: list[str] = []
+    try:
+        async for chunk in _stream_openai_from(req, DEEPWL_BASE, DEEPWL_KEY):
+            buf.append(chunk)
+            yield chunk
+        return
+    except Exception:
+        pass
+    # fallback: data999
+    if buf:
+        return  # already yielded some content, don't double-send
+    async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
+        yield chunk
 
 
 async def _stream_gemini(req: ChatRequest):
@@ -140,9 +162,9 @@ async def _stream_gemini(req: ChatRequest):
 async def chat(req: ChatRequest):
     if req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
-    elif req.model in GEMINI_MODELS:
-        gen = _stream_gemini(req)
     else:
+        # deepwl supports OpenAI-compatible format for all models (incl. Gemini)
+        # _stream_openai already handles deepwl-first + data999 fallback
         gen = _stream_openai(req)
     return StreamingResponse(
         gen, media_type="text/event-stream",
@@ -155,8 +177,6 @@ async def chat_sync(req: ChatRequest):
     """Non-streaming chat — collects full response and returns JSON."""
     if req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
-    elif req.model in GEMINI_MODELS:
-        gen = _stream_gemini(req)
     else:
         gen = _stream_openai(req)
     full = ""
