@@ -498,12 +498,45 @@ const IMAGE_MODELS = [
 ]
 
 const VIDEO_MODELS = [
-  // Deepwl（同步返回，无需轮询）
-  { id:'veo_3_1-fast',  name:'Veo 3.1 Fast ⚡',  desc:'谷歌Veo最快版，自带BGM', icon:'✿', bg:'linear-gradient(135deg,#1d4ed8,#1e3a8a)', source:'deepwl',
+  // Deepwl — Veo 3.1系列（同步返回，无需轮询）
+  { id:'veo_3_1-fast',          name:'Veo 3.1 Fast ⚡',        desc:'$0.4 谷歌Veo最快，自带BGM', icon:'✿', bg:'linear-gradient(135deg,#1d4ed8,#1e3a8a)', source:'deepwl',
     refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
-  { id:'veo_3_1',       name:'Veo 3.1 标准 ⚡',  desc:'谷歌Veo标准版，高质量', icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)', source:'deepwl',
+  { id:'veo_3_1',               name:'Veo 3.1 标准 ⚡',        desc:'$0.6 高质量，自带BGM', icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)', source:'deepwl',
     refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
-  { id:'grok-video-3',  name:'Grok Video 3 ⚡',  desc:'快速生成，即时返回', icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'deepwl',
+  { id:'veo_3_1-4K',            name:'Veo 3.1 4K ⚡',          desc:'$0.6 4K超清画质', icon:'✿', bg:'linear-gradient(135deg,#1e40af,#1e3a8a)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'veo_3_1-lite',          name:'Veo 3.1 Lite ⚡',        desc:'$0.4 轻量版，性价比最高', icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'veo_3_1-lite-4K',       name:'Veo 3.1 Lite 4K ⚡',    desc:'$0.4 轻量4K版', icon:'✿', bg:'linear-gradient(135deg,#60a5fa,#1e3a8a)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'veo_3_1-landscape',     name:'Veo 3.1 横屏 ⚡',        desc:'$0.5 横屏16:9专用', icon:'✿', bg:'linear-gradient(135deg,#1d4ed8,#312e81)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'veo_3_1-portrait',      name:'Veo 3.1 竖屏 ⚡',        desc:'$0.5 竖屏9:16专用', icon:'✿', bg:'linear-gradient(135deg,#4338ca,#1e3a8a)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'veo_3_1-fl',            name:'Veo 3.1 首尾帧 ⚡',      desc:'$0.6 支持首尾帧控制', icon:'✿', bg:'linear-gradient(135deg,#1e3a8a,#0f172a)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'veo_3_1-fast-fl',       name:'Veo 3.1 Fast 首尾帧 ⚡', desc:'$0.4 快速首尾帧版', icon:'✿', bg:'linear-gradient(135deg,#1e40af,#0f172a)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  // Deepwl — Grok Video系列
+  { id:'grok-video-3',          name:'Grok Video 3 ⚡',        desc:'$0.4 快速生成，即时返回', icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'grok-video-3-10s',      name:'Grok Video 3 10s ⚡',    desc:'$0.4 10秒长视频', icon:'⚡', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'grok-video-3-15s',      name:'Grok Video 3 15s ⚡',    desc:'$0.4 15秒长视频', icon:'⚡', bg:'linear-gradient(135deg,#5b21b6,#4c1d95)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  // Deepwl — 可灵3.0系列
+  { id:'kling-3.0-omni-720p-noref-mute',  name:'可灵3.0 720P静音 ⚡',  desc:'$0.6 720P无参考图，静音', icon:'◈', bg:'linear-gradient(135deg,#0891b2,#0c4a6e)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'kling-3.0-omni-720p-noref-audio', name:'可灵3.0 720P有声 ⚡',  desc:'$0.8 720P无参考图，有声', icon:'◈', bg:'linear-gradient(135deg,#0e7490,#0c4a6e)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'kling-3.0-omni',                  name:'可灵3.0 Omni ⚡',       desc:'$1.0 最高质量旗舰版', icon:'◈', bg:'linear-gradient(135deg,#155e75,#0c4a6e)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  // Deepwl — 即梦系列
+  { id:'jimeng_t2v_v30_1080p',  name:'即梦 T2V 1080P ⚡',     desc:'$0.15 文生视频1080P', icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'jimeng-4.5',            name:'即梦 4.5 ⚡',            desc:'$0.18 最新即梦旗舰', icon:'✦', bg:'linear-gradient(135deg,#d97706,#78350f)', source:'deepwl',
+    refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
+  { id:'jimeng-video-3.0',      name:'即梦视频 3.0 ⚡',        desc:'$0.15 即梦视频生成', icon:'✦', bg:'linear-gradient(135deg,#b45309,#78350f)', source:'deepwl',
     refMode:'none', hasDuration:false, hasMode:false, hasRatio:false },
   // DATA999
   { id:'kling-v3-omni-shouweizhen', name:'可灵V3 首尾帧',   desc:'⭐首尾帧主力，有声视频，质量最强', icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'data999',
