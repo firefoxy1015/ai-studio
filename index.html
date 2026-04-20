@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Studio</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c14;--sidebar:#11111c;--card:#181827;--border:#252538;
+  --accent:#6c5ce7;--accent2:#00cec9;--text:#e0e0f0;--muted:#6868a0;
+  --success:#00b894;--error:#e17055;--hover:#1e1e30;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+#app{display:flex;height:100vh;overflow:hidden}
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#333350;border-radius:4px}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar{width:220px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-logo{padding:16px 14px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.logo-text{font-size:15px;font-weight:700;background:linear-gradient(90deg,#a29bfe,#74b9ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-size:10px;color:var(--muted)}
+
+.cat-tabs{display:flex;padding:10px 10px 6px;gap:4px}
+.cat-tab{flex:1;padding:6px 0;text-align:center;font-size:12px;border-radius:8px;cursor:pointer;color:var(--muted);transition:.15s;border:1px solid transparent}
+.cat-tab:hover{color:var(--text);background:var(--hover)}
+.cat-tab.active{color:#fff;background:linear-gradient(135deg,var(--accent),#4834d4);border-color:rgba(108,92,231,.4)}
+
+.model-list{flex:1;overflow-y:auto;padding:4px 8px 8px}
+.model-item{padding:10px 10px;border-radius:10px;cursor:pointer;margin-bottom:4px;transition:.15s;display:flex;align-items:flex-start;gap:10px;border:1px solid transparent}
+.model-item:hover{background:var(--hover)}
+.model-item.active{background:linear-gradient(135deg,rgba(108,92,231,.2),rgba(116,185,255,.1));border-color:rgba(108,92,231,.4)}
+.model-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;margin-top:1px}
+.model-info{flex:1;min-width:0}
+.model-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.model-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.model-tag{display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;margin-top:4px;font-weight:600}
+.tag-chat{background:rgba(116,185,255,.2);color:#74b9ff}
+.tag-image{background:rgba(253,203,110,.2);color:#fdcb6e}
+.tag-video{background:rgba(0,206,201,.2);color:#00cec9}
+.tag-music{background:rgba(232,67,147,.2);color:#fd79a8}
+
+.sidebar-footer{padding:10px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+.balance-val{color:var(--success);font-weight:600}
+
+/* ── Main Area ───────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* Top bar */
+.topbar{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.topbar-model{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.topbar-hint{font-size:12px;color:var(--muted)}
+
+/* History feed */
+.history{flex:1;overflow-y:auto;padding:20px}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:12px}
+.empty-icon{font-size:48px;opacity:.4}
+.empty-text{font-size:14px}
+
+/* History cards */
+.gen-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
+.gen-card-header{padding:12px 16px;display:flex;align-items:center;gap:10px}
+.gen-prompt{flex:1;font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.gen-time{font-size:11px;color:var(--muted);flex-shrink:0}
+.gen-results{padding:0 16px 14px;display:flex;flex-wrap:wrap;gap:10px}
+.gen-img{width:160px;height:160px;object-fit:cover;border-radius:10px;cursor:pointer;transition:.15s}
+.gen-img:hover{opacity:.85;transform:scale(1.01)}
+.gen-video{max-width:300px;max-height:220px;border-radius:10px;background:#000}
+.gen-audio{width:100%;max-width:400px}
+.gen-progress{padding:0 16px 14px}
+.progress-bar-wrap{background:#1e1e30;border-radius:99px;height:6px;overflow:hidden;margin-bottom:6px}
+.progress-bar{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s}
+.progress-text{font-size:12px;color:var(--muted)}
+.gen-actions{padding:8px 16px 12px;display:flex;gap:8px;border-top:1px solid var(--border)}
+.btn-sm{font-size:12px;padding:4px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:.15s}
+.btn-sm:hover{border-color:var(--accent);color:var(--text)}
+
+/* Chat messages */
+.chat-messages{padding:16px}
+.msg{margin-bottom:16px;display:flex;flex-direction:column}
+.msg.user{align-items:flex-end}
+.msg.assistant{align-items:flex-start}
+.msg-bubble{max-width:75%;padding:12px 16px;border-radius:14px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.msg.user .msg-bubble{background:linear-gradient(135deg,var(--accent),#4834d4);color:#fff;border-bottom-right-radius:4px}
+.msg.assistant .msg-bubble{background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-bubble code{background:rgba(0,0,0,.3);padding:2px 6px;border-radius:4px;font-size:12px;font-family:monospace}
+.msg-bubble pre{background:rgba(0,0,0,.4);padding:12px;border-radius:8px;margin:8px 0;overflow-x:auto}
+.msg-bubble pre code{background:none;padding:0}
+.cursor-blink{display:inline-block;width:2px;height:14px;background:var(--accent2);margin-left:2px;animation:blink .8s infinite;vertical-align:middle}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Bottom Input ────────────────────────────────────── */
+.input-area{border-top:1px solid var(--border);padding:14px 20px;flex-shrink:0}
+.input-refs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.ref-chip{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px}
+.ref-chip-type{font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(108,92,231,.3);color:#a29bfe}
+.ref-chip-name{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.ref-chip-del{cursor:pointer;color:var(--muted);font-size:14px;line-height:1}
+.ref-chip-del:hover{color:var(--error)}
+.add-ref-btn{display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;border-radius:8px;border:1px dashed var(--border);cursor:pointer;color:var(--muted);background:transparent;transition:.15s}
+.add-ref-btn:hover{border-color:var(--accent);color:var(--text)}
+
+.input-row{display:flex;gap:10px;align-items:flex-end}
+.textarea-wrap{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;transition:.15s}
+.textarea-wrap:focus-within{border-color:var(--accent)}
+.prompt-input{width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:14px;resize:none;line-height:1.5;font-family:inherit;min-height:44px;max-height:160px}
+.prompt-input::placeholder{color:var(--muted)}
+
+.params-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.param-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;white-space:nowrap}
+.param-btn:hover{border-color:var(--accent);color:var(--text)}
+.param-select{font-size:12px;padding:4px 8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;outline:none}
+.param-select:focus{border-color:var(--accent)}
+.param-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+.send-btn{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4834d4);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s;font-size:20px}
+.send-btn:hover{transform:scale(1.05);opacity:.9}
+.send-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* Param panel for ref images */
+.ref-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center}
+.ref-modal-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:480px;max-width:90vw}
+.ref-modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
+.ref-modal-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:10px}
+.ref-modal-input:focus{border-color:var(--accent)}
+.ref-modal-row{display:flex;gap:8px;margin-bottom:14px}
+.ref-type-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;transition:.15s}
+.ref-type-btn.active,.ref-type-btn:hover{border-color:var(--accent);color:var(--text);background:rgba(108,92,231,.15)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.btn-cancel{padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:13px}
+.btn-confirm{padding:8px 18px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+
+/* Lightbox */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:12px;object-fit:contain}
+
+/* System prompt */
+.system-wrap{padding:0 8px 8px}
+.system-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;resize:none;outline:none;height:70px;font-family:inherit}
+.system-input:focus{border-color:var(--accent)}
+.section-label{font-size:11px;color:var(--muted);padding:8px 8px 4px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🎨</div>
+      <div>
+        <div class="logo-text">AI Studio</div>
+        <div class="logo-sub">影片 · 图片 · 文字</div>
+      </div>
+    </div>
+
+    <div class="cat-tabs">
+      <div v-for="c in categories" :key="c.id"
+           :class="['cat-tab', {active: activeCategory===c.id}]"
+           @click="switchCategory(c.id)">{{ c.label }}</div>
+    </div>
+
+    <div v-if="activeCategory==='chat'" class="system-wrap">
+      <div class="section-label">系统提示词</div>
+      <textarea class="system-input" v-model="chatSystem" placeholder="可选：设置AI角色..."></textarea>
+    </div>
+
+    <div class="model-list">
+      <div v-for="m in currentModels" :key="m.id"
+           :class="['model-item', {active: selectedModelId===m.id}]"
+           @click="selectModel(m.id)">
+        <div class="model-icon" :style="{background: m.bg}">{{ m.icon }}</div>
+        <div class="model-info">
+          <div class="model-name">{{ m.name }}</div>
+          <div class="model-desc">{{ m.desc }}</div>
+          <div class="model-tag" :class="'tag-'+activeCategory">{{ categoryLabel }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      余额：<span class="balance-val">{{ balanceText }}</span>
+    </div>
+  </div>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="topbar-model">
+        <span v-if="selectedModel">{{ selectedModel.icon }} {{ selectedModel.name }}</span>
+        <span v-else style="color:var(--muted)">请选择模型</span>
+      </div>
+      <div class="topbar-hint" v-if="activeCategory==='chat'">Enter 发送 · Shift+Enter 换行</div>
+      <div class="topbar-hint" v-else>图片/视频生成需要数分钟，请耐心等待</div>
+    </div>
+
+    <!-- History / Chat -->
+    <div class="history" ref="historyEl">
+      <!-- CHAT mode -->
+      <template v-if="activeCategory==='chat'">
+        <div v-if="chatMessages.length===0" class="empty-state">
+          <div class="empty-icon">💬</div>
+          <div class="empty-text">选择左侧模型，开始对话</div>
+        </div>
+        <div class="chat-messages">
+          <div v-for="(msg,i) in chatMessages" :key="i" :class="['msg', msg.role]">
+            <div class="msg-bubble" v-html="renderMd(msg.content)"></div>
+          </div>
+          <div v-if="chatStreaming" class="msg assistant">
+            <div class="msg-bubble" v-html="renderMd(chatStreaming)+'<span class=\'cursor-blink\'></span>'"></div>
+          </div>
+        </div>
+      </template>
+
+      <!-- GENERATION mode -->
+      <template v-else>
+        <div v-if="generations.length===0" class="empty-state">
+          <div class="empty-icon">{{ activeCategory==='image'?'🖼️':activeCategory==='video'?'🎬':'🎵' }}</div>
+          <div class="empty-text">在下方输入描述，点击发送开始生成</div>
+        </div>
+        <div v-for="(g, gi) in generations" :key="g.id" class="gen-card">
+          <div class="gen-card-header">
+            <div class="model-icon" :style="{background: modelById(g.modelId)?.bg||'#333', fontSize:'13px', width:'28px', height:'28px'}">
+              {{ modelById(g.modelId)?.icon||'🤖' }}
+            </div>
+            <div class="gen-prompt">{{ g.prompt }}</div>
+            <div class="gen-time">{{ g.time }}</div>
+          </div>
+          <!-- Progress -->
+          <div v-if="g.loading" class="gen-progress">
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" :style="{width: g.progress+'%'}"></div>
+            </div>
+            <div class="progress-text">{{ g.progressText || '生成中...' }} {{ g.progress }}%</div>
+          </div>
+          <!-- Results -->
+          <div v-if="g.results && g.results.length" class="gen-results">
+            <template v-if="activeCategory==='image'">
+              <img v-for="url in g.results" :key="url" :src="url" class="gen-img"
+                   @click="openLightbox(url)" loading="lazy" />
+            </template>
+            <template v-else-if="activeCategory==='video'">
+              <video v-for="url in g.results" :key="url" :src="url"
+                     class="gen-video" controls></video>
+            </template>
+            <template v-else-if="activeCategory==='music'">
+              <audio v-for="url in g.results" :key="url" :src="url"
+                     class="gen-audio" controls></audio>
+            </template>
+          </div>
+          <!-- Error -->
+          <div v-if="g.error" style="padding:8px 16px 12px;color:var(--error);font-size:13px">
+            ❌ {{ g.error }}
+          </div>
+          <!-- Actions -->
+          <div v-if="!g.loading" class="gen-actions">
+            <button class="btn-sm" @click="rerun(g)">🔄 再次生成</button>
+            <template v-if="g.results && g.results.length">
+              <a v-for="url in g.results" :key="url" :href="url" download target="_blank">
+                <button class="btn-sm">⬇ 下载</button>
+              </a>
+            </template>
+            <button class="btn-sm" style="margin-left:auto" @click="generations.splice(gi,1)">删除</button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── Bottom Input ── -->
+    <div class="input-area">
+      <!-- Reference chips -->
+      <div class="input-refs" v-if="activeCategory!=='chat' && (refs.length || true)">
+        <div v-for="(ref,ri) in refs" :key="ri" class="ref-chip">
+          <span class="ref-chip-type">{{ ref.type }}</span>
+          <span class="ref-chip-name">{{ ref.name }}</span>
+          <span class="ref-chip-del" @click="refs.splice(ri,1)">×</span>
+        </div>
+        <button class="add-ref-btn" @click="showRefModal=true" v-if="activeCategory!=='chat'">
+          📎 添加参考图
+        </button>
+      </div>
+
+      <!-- Prompt + send -->
+      <div class="input-row">
+        <div class="textarea-wrap">
+          <textarea class="prompt-input"
+            v-model="promptText"
+            :placeholder="inputPlaceholder"
+            @keydown.enter.exact.prevent="submit"
+            @input="autoResize"
+            ref="promptEl"
+            rows="2"></textarea>
+          <!-- Params row for generation modes -->
+          <div class="params-row" v-if="activeCategory!=='chat'">
+            <template v-if="activeCategory==='video' || activeCategory==='image'">
+              <span class="param-label">比例</span>
+              <select class="param-select" v-model="paramRatio">
+                <option v-for="r in ratioOptions" :key="r" :value="r">{{ r }}</option>
+              </select>
+            </template>
+            <template v-if="activeCategory==='video'">
+              <span class="param-label">时长</span>
+              <select class="param-select" v-model="paramDuration">
+                <option v-for="d in durationOptions" :key="d" :value="d">{{ d }}秒</option>
+              </select>
+              <span class="param-label">模式</span>
+              <select class="param-select" v-model="paramMode">
+                <option value="std">标准</option>
+                <option value="pro">高质量</option>
+              </select>
+            </template>
+            <template v-if="activeCategory==='music'">
+              <span class="param-label">类型</span>
+              <select class="param-select" v-model="paramMusicType">
+                <option value="instrumental">纯音乐</option>
+                <option value="song">歌曲（需填歌词）</option>
+              </select>
+            </template>
+          </div>
+          <!-- Lyrics for song mode -->
+          <div v-if="activeCategory==='music' && paramMusicType==='song'" style="margin-top:8px">
+            <textarea class="prompt-input" v-model="lyricsText"
+              placeholder="在此输入歌词..." rows="3"
+              style="border-top:1px solid var(--border);padding-top:8px"></textarea>
+          </div>
+        </div>
+        <button class="send-btn" @click="submit" :disabled="isLoading || !promptText.trim()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Ref Modal ── -->
+  <div class="ref-modal" v-if="showRefModal" @click.self="showRefModal=false">
+    <div class="ref-modal-box">
+      <div class="ref-modal-title">添加参考素材</div>
+      <div class="ref-modal-row">
+        <button v-for="t in refTypeOptions" :key="t"
+                :class="['ref-type-btn', {active: refModalType===t}]"
+                @click="refModalType=t">{{ t }}</button>
+      </div>
+      <input class="ref-modal-input" v-model="refModalUrl"
+             placeholder="粘贴图片/视频 URL..." />
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:10px">— 或者 —</div>
+      <input type="file" ref="fileInput" style="display:none" @change="onFileSelected" accept="image/*,video/*,audio/*" />
+      <button class="btn-cancel" style="width:100%;margin-bottom:14px" @click="$refs.fileInput.click()">
+        📁 上传本地文件
+      </button>
+      <div class="modal-actions">
+        <button class="btn-cancel" @click="showRefModal=false">取消</button>
+        <button class="btn-confirm" @click="addRef">确认添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" v-if="lightboxUrl" @click="lightboxUrl=null">
+    <img :src="lightboxUrl" />
+  </div>
+
+</div>
+
+<script>
+const { createApp, ref, computed, reactive, nextTick, onMounted } = Vue
+
+// ── Model definitions ─────────────────────────────────────────────────────
+
+const CHAT_MODELS = [
+  { id:'claude-opus-4-7',     name:'opus-4-7',         desc:'最强推理·创意写作·极难被检测出AI',   icon:'✦', bg:'linear-gradient(135deg,#d97706,#92400e)' },
+  { id:'claude-sonnet-4-6',   name:'Sonnet 4.6',        desc:'均衡性能，日常使用首选',              icon:'✦', bg:'linear-gradient(135deg,#b45309,#78350f)' },
+  { id:'gpt-5.4',             name:'GPT-5.4',            desc:'旗舰多模态，工具调用，深度推理',       icon:'⬡', bg:'linear-gradient(135deg,#10b981,#065f46)' },
+  { id:'gpt-5.4-mini',        name:'GPT-5.4 Mini',       desc:'快速轻量，性价比高',                  icon:'⬡', bg:'linear-gradient(135deg,#059669,#064e3b)' },
+  { id:'gemini-3.1-pro-preview', name:'Gemini 3.1 Pro',  desc:'谷歌旗舰，复杂推理·多模态',           icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)' },
+  { id:'gemini-3.1-flash-lite-preview', name:'Gemini 3.1 Flash', desc:'快速版，速度最快',           icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)' },
+  { id:'grok-4.2',            name:'Grok 4.2',           desc:'万亿参数·16 Agent·实时联网',          icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)' },
+  { id:'doubao-seed-2-0-pro-260215', name:'豆包 Seed 2.0', desc:'256K上下文，多模态，联网搜索',       icon:'◉', bg:'linear-gradient(135deg,#f59e0b,#78350f)' },
+]
+
+const IMAGE_MODELS = [
+  { id:'grok-4.2-image',      name:'Grok 图像 4.2',     desc:'⭐写实油画最强，固定出2张',            icon:'◎', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)',
+    paramDefs: { size:{type:'select',label:'尺寸',opts:['1080x1920','1920x1080','1080x1080','720x1280','1280x720'],def:'1080x1080'} } },
+  { id:'kling-image-o1',      name:'可灵 Image o1',      desc:'⭐人物一致性最好，像素级改图',          icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)' },
+  { id:'kling-v3-omni',       name:'可灵 V3 Omni',       desc:'最多10张参考图融合，4K',              icon:'◈', bg:'linear-gradient(135deg,#0e7490,#164e63)' },
+  { id:'doubao-seedream-5-0-260128', name:'即梦 5.0',    desc:'⭐多图融合·联网生图·3K',              icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)' },
+  { id:'gemini-3-pro-image-preview', name:'Nano Banana Pro', desc:'文字渲染最强，8K分辨率',         icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)' },
+  { id:'gpt-image-1.5-all',   name:'GPT Image 1.5',      desc:'语义理解最强，大白话生图',             icon:'⬡', bg:'linear-gradient(135deg,#10b981,#065f46)' },
+  { id:'mj_imagine',          name:'Midjourney',          desc:'艺术感最强，支持普通/动漫风格',         icon:'🎨', bg:'linear-gradient(135deg,#ec4899,#831843)' },
+  { id:'wan2.7-image',        name:'万相 2.7',           desc:'最新版4K，中文语义理解强',             icon:'◉', bg:'linear-gradient(135deg,#ef4444,#7f1d1d)' },
+  { id:'wan2.6-image',        name:'万相 2.6',           desc:'风格迁移，中文语义',                   icon:'◉', bg:'linear-gradient(135deg,#dc2626,#7f1d1d)' },
+]
+
+const VIDEO_MODELS = [
+  // DATA999
+  { id:'kling-v3-omni-shouweizhen', name:'可灵V3 首尾帧',   desc:'⭐首尾帧主力，有声视频，质量最强', icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'data999',
+    refMode:'first_last', hasDuration:true, hasMode:true, hasRatio:false },
+  { id:'kling-v3-video',            name:'可灵V3 Video',      desc:'文生/图生视频，支持首帧', icon:'◈', bg:'linear-gradient(135deg,#0e7490,#164e63)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
+  { id:'pixverse-v6-shouweizhen',   name:'Pix V6 首尾帧',     desc:'V6多模态，支持首尾帧', icon:'◆', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'pixverse-c1-shouweizhen',   name:'Pix C1 首尾帧',     desc:'动态特效，首尾帧', icon:'◆', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'data999',
+    refMode:'first_last', hasDuration:true, hasMode:false, hasRatio:false },
+  { id:'kwvideo-v2',                name:'Seedance 2.0',       desc:'首尾帧+全能参考，按Token计费', icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'doubao-seedance-1-5-pro-251215', name:'即梦 3.5 Pro', desc:'⭐音画质最佳，支持首尾帧', icon:'✦', bg:'linear-gradient(135deg,#d97706,#78350f)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'veo3.1',                    name:'Veo 3.1',            desc:'谷歌出品，自带BGM，有声视频', icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)', source:'data999',
+    refMode:'optional', hasDuration:false, hasMode:false, hasRatio:true },
+  { id:'veo3.1-lite',               name:'Veo 3.1 Lite',       desc:'Veo轻量版，性价比最高', icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)', source:'data999',
+    refMode:'optional', hasDuration:false, hasMode:false, hasRatio:true },
+  { id:'grok-video-3',              name:'Grok Video 3',       desc:'快速首帧视频', icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', source:'data999',
+    refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'grok-video-3-plus',         name:'Grok Video 3+',      desc:'最长30秒长视频', icon:'⚡', bg:'linear-gradient(135deg,#6d28d9,#4c1d95)', source:'data999',
+    refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'viduq3',                    name:'Vidu Q3',            desc:'最长16秒，高质量', icon:'◉', bg:'linear-gradient(135deg,#ec4899,#831843)', source:'data999',
+    refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
+  // Bytefor
+  { id:'Seedance 2.0 Fast',         name:'Seedance 2.0 Fast',  desc:'快速版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'bytefor',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'Seedance 2.0',              name:'Seedance 2.0',       desc:'高质量版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0e7490,#164e63)', source:'bytefor',
+    refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
+]
+
+const MUSIC_MODELS = [
+  { id:'music-2.5+', name:'海螺音乐 2.5+', desc:'⭐最强音乐生成，纯音乐/歌曲', icon:'🎵', bg:'linear-gradient(135deg,#ec4899,#831843)', type:'music' },
+  { id:'music-2.5',  name:'海螺音乐 2.5',  desc:'上一代音乐生成模型',           icon:'🎵', bg:'linear-gradient(135deg,#db2777,#831843)', type:'music' },
+  { id:'speech-2.8', name:'海螺语音 2.8',  desc:'语音合成，支持情绪/音效',       icon:'🎙', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)', type:'speech' },
+]
+
+const ALL_MODELS_MAP = {}
+;[...CHAT_MODELS,...IMAGE_MODELS,...VIDEO_MODELS,...MUSIC_MODELS].forEach(m => ALL_MODELS_MAP[m.id]=m)
+
+// ── Markdown renderer (basic) ──────────────────────────────────────────────
+function renderMd(text) {
+  if (!text) return ''
+  let t = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  // Code blocks
+  t = t.replace(/```[\s\S]*?```/g, m => {
+    const code = m.slice(3, m.lastIndexOf('```')).replace(/^[a-z]*\n/, '')
+    return `<pre><code>${code}</code></pre>`
+  })
+  // Inline code
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>')
+  // Bold
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  // Newlines
+  t = t.replace(/\n/g, '<br>')
+  return t
+}
+
+// ── App ───────────────────────────────────────────────────────────────────
+createApp({
+  setup() {
+    const activeCategory = ref('chat')
+    const selectedModelId = ref('claude-sonnet-4-6')
+    const chatMessages = ref([])
+    const chatStreaming = ref('')
+    const chatSystem = ref('')
+    const isLoading = ref(false)
+    const generations = ref([])
+    const promptText = ref('')
+    const lyricsText = ref('')
+    const refs = ref([])
+    const paramRatio = ref('9:16')
+    const paramDuration = ref('5')
+    const paramMode = ref('pro')
+    const paramMusicType = ref('instrumental')
+    const balanceText = ref('加载中...')
+    const historyEl = ref(null)
+    const promptEl = ref(null)
+    const showRefModal = ref(false)
+    const refModalUrl = ref('')
+    const refModalType = ref('参考图')
+    const fileInput = ref(null)
+    const lightboxUrl = ref(null)
+
+    const categories = [
+      { id:'chat', label:'文字' },
+      { id:'image', label:'图片' },
+      { id:'video', label:'视频' },
+      { id:'music', label:'音乐' },
+    ]
+
+    const categoryLabel = computed(() => ({chat:'对话',image:'图片',video:'视频',music:'音乐'}[activeCategory.value]))
+
+    const currentModels = computed(() => {
+      if (activeCategory.value === 'chat') return CHAT_MODELS
+      if (activeCategory.value === 'image') return IMAGE_MODELS
+      if (activeCategory.value === 'video') return VIDEO_MODELS
+      return MUSIC_MODELS
+    })
+
+    const selectedModel = computed(() => ALL_MODELS_MAP[selectedModelId.value] || null)
+
+    const refTypeOptions = computed(() => {
+      if (activeCategory.value === 'video') return ['首帧','尾帧','参考图']
+      return ['参考图']
+    })
+
+    const ratioOptions = computed(() => {
+      if (activeCategory.value === 'video') return ['9:16','16:9','1:1','3:4','4:3']
+      return ['9:16','16:9','1:1','3:4','4:3']
+    })
+
+    const durationOptions = computed(() => {
+      const m = selectedModel.value
+      if (!m) return ['5','10','15']
+      if (m.id === 'grok-video-3') return ['6','10']
+      if (m.id === 'grok-video-3-plus') return ['10','15','20','25','30']
+      if (m.id === 'viduq3') return ['4','8','12','16']
+      return ['5','10','15']
+    })
+
+    const inputPlaceholder = computed(() => {
+      if (activeCategory.value === 'chat') return '输入消息...'
+      if (activeCategory.value === 'image') return '描述想要生成的图片内容，支持中英文...'
+      if (activeCategory.value === 'video') return '描述视频动作、场景及氛围，上传参考图效果更佳...'
+      return '描述想要生成的音乐风格和氛围...'
+    })
+
+    function switchCategory(cat) {
+      activeCategory.value = cat
+      // Auto-select first model
+      const models = cat==='chat'?CHAT_MODELS:cat==='image'?IMAGE_MODELS:cat==='video'?VIDEO_MODELS:MUSIC_MODELS
+      if (models.length) selectedModelId.value = models[0].id
+      refs.value = []
+    }
+
+    function selectModel(id) {
+      selectedModelId.value = id
+    }
+
+    function modelById(id) {
+      return ALL_MODELS_MAP[id] || null
+    }
+
+    function autoResize(e) {
+      e.target.style.height = 'auto'
+      e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
+    }
+
+    async function submit() {
+      if (!promptText.value.trim() || isLoading.value) return
+      if (!selectedModelId.value) { alert('请先选择模型'); return }
+
+      if (activeCategory.value === 'chat') {
+        await sendChat()
+      } else {
+        await generate()
+      }
+    }
+
+    async function sendChat() {
+      const text = promptText.value.trim()
+      chatMessages.value.push({ role:'user', content: text })
+      promptText.value = ''
+      chatStreaming.value = ''
+      isLoading.value = true
+
+      await nextTick()
+      scrollBottom()
+
+      try {
+        const resp = await fetch('/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            model: selectedModelId.value,
+            messages: chatMessages.value,
+            system: chatSystem.value || null,
+          })
+        })
+        if (!resp.ok) throw new Error('请求失败')
+
+        const reader = resp.body.getReader()
+        const dec = new TextDecoder()
+        let buf = ''
+
+        while (true) {
+          const {done, value} = await reader.read()
+          if (done) break
+          buf += dec.decode(value, {stream:true})
+          const lines = buf.split('\n')
+          buf = lines.pop() || ''
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const s = line.slice(6).trim()
+            if (s === '[DONE]') continue
+            try {
+              const d = JSON.parse(s)
+              chatStreaming.value += d.text || ''
+              scrollBottom()
+            } catch(e) {}
+          }
+        }
+        chatMessages.value.push({ role:'assistant', content: chatStreaming.value })
+        chatStreaming.value = ''
+      } catch(e) {
+        chatMessages.value.push({ role:'assistant', content:'❌ 请求失败：'+e.message })
+      } finally {
+        isLoading.value = false
+        scrollBottom()
+      }
+    }
+
+    async function generate() {
+      const m = selectedModel.value
+      if (!m) return
+
+      const prompt = promptText.value.trim()
+      promptText.value = ''
+      isLoading.value = true
+
+      // Build params
+      const params = buildParams(m)
+
+      const card = reactive({
+        id: Date.now(),
+        modelId: selectedModelId.value,
+        prompt,
+        refs: [...refs.value],
+        params,
+        source: m.source || 'data999',
+        loading: true,
+        progress: 0,
+        progressText: '提交中...',
+        results: [],
+        error: null,
+        time: new Date().toLocaleTimeString('zh', {hour:'2-digit',minute:'2-digit'}),
+      })
+      generations.value.unshift(card)
+
+      await nextTick()
+      scrollBottom()
+
+      try {
+        const resp = await fetch('/api/generate', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ source: card.source, model: m.id, prompt, params })
+        })
+        if (!resp.ok) {
+          const err = await resp.json().catch(()=>({detail:'未知错误'}))
+          throw new Error(err.detail || JSON.stringify(err))
+        }
+        const {task_id, source} = await resp.json()
+        card.progressText = '排队中...'
+        await pollTask(card, task_id, source)
+      } catch(e) {
+        card.error = e.message
+        card.loading = false
+      } finally {
+        isLoading.value = false
+      }
+    }
+
+    function buildParams(m) {
+      const p = {}
+      if (activeCategory.value === 'image') {
+        p.aspect_ratio = paramRatio.value
+        if (m.id === 'grok-4.2-image' || m.id === 'gpt-image-1.5-all') {
+          p.size = '1080x1080'
+          delete p.aspect_ratio
+        }
+        if (m.id === 'mj_imagine') {
+          p.botType = 'MID_JOURNEY'
+          p.aspectRatio = paramRatio.value
+          delete p.aspect_ratio
+        }
+        if (m.id === 'gemini-3-pro-image-preview' || m.id === 'gemini-3.1-flash-image-preview') {
+          p.aspectRatio = paramRatio.value
+          delete p.aspect_ratio
+        }
+        if (m.id === 'wan2.7-image') p.quality = 'standard'
+        if (refs.value.length) p.images = refs.value.map(r=>r.url)
+      } else if (activeCategory.value === 'video') {
+        if (m.hasDuration) {
+          if (m.source === 'bytefor') p.duration = paramDuration.value + 's'
+          else p.duration = paramDuration.value
+        }
+        if (m.hasRatio) p.aspect_ratio = paramRatio.value
+        if (m.hasMode) p.mode = paramMode.value
+
+        // Build images param
+        const firstFrames = refs.value.filter(r=>r.type==='首帧').map(r=>r.url)
+        const lastFrames  = refs.value.filter(r=>r.type==='尾帧').map(r=>r.url)
+        const refImgs     = refs.value.filter(r=>r.type==='参考图').map(r=>r.url)
+
+        if (m.refMode === 'first_last') {
+          const imgs = [...firstFrames, ...lastFrames]
+          if (imgs.length) p.images = imgs
+        } else if (m.refMode === 'single') {
+          if (firstFrames.length) p.images = [firstFrames[0]]
+        } else {
+          // optional — first frame as first, last frame as second, refs as array
+          const imgs = [...firstFrames, ...lastFrames, ...refImgs]
+          if (imgs.length) p.images = imgs
+        }
+
+        // Bytefor special
+        if (m.source === 'bytefor') {
+          p.aspectRatio = paramRatio.value
+          delete p.aspect_ratio
+          if (p.images) p.images = refs.value.map(r=>r.url)
+        }
+        // Veo needs enhance_prompt
+        if (m.id === 'veo3.1' || m.id === 'veo3.1-lite') p.enhance_prompt = true
+        // kwvideo needs version
+        if (m.id === 'kwvideo-v2') { p.version = '标准'; p.aspect_ratio = paramRatio.value }
+        // viduq3 needs model_variant and resolution
+        if (m.id === 'viduq3') { p.model_variant = paramMode.value==='pro'?'pro':'turbo'; p.resolution = '1080p'; p.aspect_ratio = paramRatio.value }
+      } else if (activeCategory.value === 'music') {
+        if (m.type === 'music') {
+          p.is_instrumental = paramMusicType.value
+          if (paramMusicType.value === 'song' && lyricsText.value.trim()) {
+            p.lyrics = lyricsText.value.trim()
+          }
+        }
+      }
+      return p
+    }
+
+    async function pollTask(card, taskId, source) {
+      const maxMs = 7200000
+      const start = Date.now()
+      while (Date.now() - start < maxMs) {
+        await sleep(8000)
+        try {
+          const r = await fetch(`/api/status/${taskId}?source=${source}`)
+          const d = await r.json()
+          card.progress = d.progress || 0
+          card.progressText = d.progress_text || d.status || '生成中...'
+          if (d.is_final) {
+            if (d.error) { card.error = d.error }
+            else { card.results = d.result_urls || [] }
+            card.loading = false
+            return
+          }
+        } catch(e) {
+          // continue polling
+        }
+      }
+      card.error = '生成超时（2小时）'
+      card.loading = false
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+    function scrollBottom() {
+      nextTick(() => {
+        if (historyEl.value) historyEl.value.scrollTop = historyEl.value.scrollHeight
+      })
+    }
+
+    // Ref modal
+    async function addRef() {
+      let url = refModalUrl.value.trim()
+      if (!url) { showRefModal.value = false; return }
+      refs.value.push({ url, name: url.split('/').pop().slice(0,30)||'素材', type: refModalType.value })
+      refModalUrl.value = ''
+      showRefModal.value = false
+    }
+
+    async function onFileSelected(e) {
+      const file = e.target.files[0]
+      if (!file) return
+      const fd = new FormData()
+      fd.append('file', file)
+      try {
+        const r = await fetch('/api/upload', { method:'POST', body:fd })
+        const d = await r.json()
+        refs.value.push({ url:d.url, name:d.name.slice(0,30), type: refModalType.value })
+        showRefModal.value = false
+        refModalUrl.value = ''
+      } catch(e) {
+        alert('上传失败：'+e.message)
+      }
+      e.target.value = ''
+    }
+
+    function rerun(g) {
+      promptText.value = g.prompt
+      selectedModelId.value = g.modelId
+      refs.value = [...(g.refs||[])]
+    }
+
+    function openLightbox(url) { lightboxUrl.value = url }
+
+    async function loadBalance() {
+      try {
+        const r = await fetch('/api/balance')
+        const d = await r.json()
+        balanceText.value = d.balance !== undefined ? d.balance : JSON.stringify(d)
+      } catch(e) {
+        balanceText.value = '–'
+      }
+    }
+
+    onMounted(() => {
+      loadBalance()
+    })
+
+    return {
+      activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
+      chatMessages, chatStreaming, chatSystem, isLoading, generations, promptText, lyricsText,
+      refs, paramRatio, paramDuration, paramMode, paramMusicType, ratioOptions, durationOptions,
+      balanceText, historyEl, promptEl, showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
+      refTypeOptions, inputPlaceholder,
+      switchCategory, selectModel, modelById, submit, rerun, addRef, onFileSelected, openLightbox,
+      autoResize, renderMd,
+    }
+  }
+}).mount('#app')
+</script>
+</body>
+</html>
