@@ -678,7 +678,7 @@ createApp({
 
     // Computed: generations for current tab (excluding works)
     const currentGenerations = computed(() =>
-      generations.value.filter(g => g.category === activeCategory.value)
+      generations.value.filter(g => g.category === activeCategory.value && g.modelId === selectedModelId.value)
     )
 
     // Completed works (for 我的作品 tab)
