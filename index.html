@@ -604,6 +604,7 @@ createApp({
     const chatMessages = ref([])
     const chatStreaming = ref('')
     const chatSystem = ref('')
+    const chatHistories = reactive({}) // per-model: { modelId: {messages:[], system:''} }
     const isLoading = ref(false)
     const generations = ref([])
     const promptText = ref('')
@@ -716,7 +717,13 @@ createApp({
     }
 
     function selectModel(id) {
+      // Save current model's chat before switching
+      _saveChatForModel(selectedModelId.value)
       selectedModelId.value = id
+      // Load new model's chat
+      const h = chatHistories[id]
+      chatMessages.value = h ? h.messages : []
+      chatSystem.value = h ? (h.system || '') : ''
     }
 
     function modelById(id) {
@@ -1027,12 +1034,23 @@ createApp({
       localStorage.setItem(LS_KEY, JSON.stringify(toSave))
     }
 
-    function saveChat() {
-      localStorage.setItem(LS_CHAT_KEY, JSON.stringify({
-        model: selectedModelId.value,
+    function _saveChatForModel(modelId) {
+      if (!modelId) return
+      chatHistories[modelId] = {
         messages: chatMessages.value.map(m => ({ role: m.role, content: m.content })),
         system: chatSystem.value || '',
-      }))
+      }
+      // Persist all histories
+      const toSave = {}
+      for (const k in chatHistories) {
+        if (chatHistories[k].messages.length > 0)
+          toSave[k] = chatHistories[k]
+      }
+      localStorage.setItem(LS_CHAT_KEY, JSON.stringify({ v2: true, model: selectedModelId.value, histories: toSave }))
+    }
+
+    function saveChat() {
+      _saveChatForModel(selectedModelId.value)
     }
 
     // Backup saver: fires whenever completedWorks changes
@@ -1068,13 +1086,25 @@ createApp({
           if (p.taskId) pollTask(card, p.taskId, p.source)
         })
       } catch(e) {}
-      // Load chat
+      // Load chat histories
       try {
         const saved = JSON.parse(localStorage.getItem(LS_CHAT_KEY) || 'null')
-        if (saved) {
+        if (saved && saved.v2) {
+          // New per-model format
+          Object.assign(chatHistories, saved.histories || {})
           if (saved.model) selectedModelId.value = saved.model
-          if (saved.messages) chatMessages.value = saved.messages
-          if (saved.system) chatSystem.value = saved.system
+          const h = chatHistories[saved.model]
+          if (h) {
+            chatMessages.value = h.messages || []
+            chatSystem.value = h.system || ''
+          }
+        } else if (saved && saved.messages) {
+          // Migrate old single-model format
+          const modelId = saved.model || selectedModelId.value
+          chatHistories[modelId] = { messages: saved.messages, system: saved.system || '' }
+          selectedModelId.value = modelId
+          chatMessages.value = saved.messages
+          chatSystem.value = saved.system || ''
         }
       } catch(e) {}
     })
