@@ -225,7 +225,9 @@ async def chat_sync(req: ChatRequest):
                     full += d.get("text", "")
                 except Exception:
                     pass
-        if full:
+        ERROR_SIGNALS = ("❌", "ResourceExhausted", "load_shed", "Stream aborted",
+                         "upstream_error", "channel not found", "sampling engine")
+        if full and not any(s in full for s in ERROR_SIGNALS):
             return {"text": full}
     except Exception:
         pass
