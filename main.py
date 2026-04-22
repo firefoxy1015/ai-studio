@@ -222,6 +222,7 @@ async def chat_sync(req: ChatRequest):
     # data999 fallback (or primary for DATA999_ONLY_MODELS), retry up to 3 times
     ERROR_SIGNALS = ("ResourceExhausted", "load_shed", "Stream aborted",
                      "upstream_error", "channel not found", "connect to sampling engine")
+    last_err = "no attempts"
     for attempt in range(3):
         try:
             if attempt > 0:
@@ -236,10 +237,12 @@ async def chat_sync(req: ChatRequest):
                         pass
             if full and not any(s in full for s in ERROR_SIGNALS):
                 return {"text": full}
-        except Exception:
-            pass
+            matched = [s for s in ERROR_SIGNALS if s in full]
+            last_err = f"attempt {attempt}: full={repr(full[:200])} matched={matched}"
+        except Exception as e:
+            last_err = f"attempt {attempt}: exception={type(e).__name__}: {e}"
 
-    raise HTTPException(503, detail=f"模型 {req.model} 暂时不可用，请稍后重试或切换其他模型")
+    raise HTTPException(503, detail=f"模型 {req.model} 失败: {last_err}")
 
 
 @app.post("/api/generate")
