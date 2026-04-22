@@ -22,7 +22,7 @@ DEEPWL_BASE = "https://zx1.deepwl.net"
 
 CLAUDE_MODELS = {
     "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
-    "claude-haiku-4-5-20251001",
+    "claude-haiku-4-5-20251001", "claude-opus-4-5-20251101",
 }
 # Models confirmed to work on data999 but not on deepwl — skip deepwl entirely
 DATA999_ONLY_MODELS = {"grok-4.2", "grok-4.2-image", "doubao-seed-2-0-pro-260215"}
@@ -32,7 +32,7 @@ LINGKEAI_BASE = "https://php.lingkeai.vip"
 LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
 LINGKEAI_USER_ID = "9011036"
 LINGKEAI_S6 = "Chengchen@630"
-LINGKEAI_MODEL_IDS = {"grok-4.2": 94}
+LINGKEAI_MODEL_IDS = {"grok-4.2": 94, "claude-opus-4-7": 90}
 
 
 def _encode_lingkeai_token() -> str:
@@ -220,6 +220,10 @@ async def _chat_lingkeai(req: ChatRequest) -> str:
                     d = json.loads(s)
                     if d.get("type") == "error":
                         raise Exception(d.get("message", "lingkeai error"))
+                    # Claude format: {"content":"...","type":"content"}
+                    if d.get("type") == "content" and d.get("content"):
+                        full += d["content"]
+                    # grok/OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
                     choices = d.get("choices", [])
                     if choices:
                         text = choices[0].get("delta", {}).get("content", "")
@@ -256,7 +260,17 @@ async def chat_sync(req: ChatRequest):
         msgs.append({"role": "system", "content": req.system})
     msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
 
-    # Claude models always use data999 (Anthropic format)
+    # claude-opus-4-7: use lingkeai (better availability)
+    if req.model == "claude-opus-4-7":
+        try:
+            text = await _chat_lingkeai(req)
+            if text:
+                return {"text": text}
+        except Exception:
+            pass
+        # fallback to data999 Anthropic format
+
+    # Other Claude models use data999 Anthropic format
     if req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
         full = ""
