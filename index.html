@@ -787,7 +787,6 @@ createApp({
         const reader = resp.body.getReader()
         const dec = new TextDecoder()
         let full = ''
-        chatStreaming.value = ''
         while (true) {
           const { value, done } = await reader.read()
           if (done) break
