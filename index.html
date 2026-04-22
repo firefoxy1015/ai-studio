@@ -114,6 +114,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .params-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .param-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;white-space:nowrap}
 .param-btn:hover{border-color:var(--accent);color:var(--text)}
+.web-search-btn{font-size:12px;padding:4px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;white-space:nowrap}
+.web-search-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.web-search-btn.active{border-color:var(--accent2);background:rgba(0,206,201,.15);color:var(--accent2);font-weight:600}
 .param-select{font-size:12px;padding:4px 8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;outline:none}
 .param-select:focus{border-color:var(--accent)}
 .param-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
@@ -400,6 +403,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             @input="autoResize"
             ref="promptEl"
             rows="2"></textarea>
+          <!-- Web search toggle for chat mode -->
+          <div class="params-row" v-if="activeCategory==='chat'">
+            <button :class="['web-search-btn', {active: webSearch}]" @click="webSearch=!webSearch" type="button">
+              🌐 {{ webSearch ? '联网搜索 ON' : '联网搜索 OFF' }}
+            </button>
+          </div>
           <!-- Params row for generation modes -->
           <div class="params-row" v-if="activeCategory!=='chat'">
             <template v-if="activeCategory==='video' || activeCategory==='image'">
@@ -609,6 +618,7 @@ createApp({
     const isLoading = ref(false)
     const generations = ref([])
     const promptText = ref('')
+    const webSearch = ref(false)
     const lyricsText = ref('')
     const refs = ref([])
     const paramRatio = ref('9:16')
@@ -765,6 +775,7 @@ createApp({
             model: selectedModelId.value,
             messages: chatMessages.value,
             system: chatSystem.value || null,
+            web_search: webSearch.value,
           })
         })
         if (!resp.ok) throw new Error('请求失败 ' + resp.status)
