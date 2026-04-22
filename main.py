@@ -174,17 +174,46 @@ async def chat(req: ChatRequest):
 
 @app.post("/api/chat/sync")
 async def chat_sync(req: ChatRequest):
-    """Non-streaming chat — collects full response and returns JSON."""
+    """Non-streaming chat — try deepwl first, fall back to data999."""
+    msgs: list = []
+    if req.system:
+        msgs.append({"role": "system", "content": req.system})
+    msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
+
+    # Claude models always use data999 (Anthropic format)
     if req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
-    else:
-        gen = _stream_openai(req)
+        full = ""
+        async for chunk in gen:
+            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                try:
+                    d = json.loads(chunk[6:].strip())
+                    full += d.get("text", "")
+                except Exception:
+                    pass
+        return {"text": full}
+
+    # Non-Claude: try deepwl non-streaming (easier to detect errors)
+    try:
+        headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
+        body = {"model": req.model, "stream": False, "messages": msgs}
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
+        if r.status_code == 200:
+            d = r.json()
+            if not d.get("error"):
+                text = d.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if text:
+                    return {"text": text}
+    except Exception:
+        pass
+
+    # Fallback: data999
     full = ""
-    async for chunk in gen:
+    async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
         if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
             try:
-                import json as _json
-                d = _json.loads(chunk[6:].strip())
+                d = json.loads(chunk[6:].strip())
                 full += d.get("text", "")
             except Exception:
                 pass
