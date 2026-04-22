@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +26,21 @@ CLAUDE_MODELS = {
 }
 # Models confirmed to work on data999 but not on deepwl — skip deepwl entirely
 DATA999_ONLY_MODELS = {"grok-4.2", "grok-4.2-image", "doubao-seed-2-0-pro-260215"}
+
+# data999 internal API (lingkeai) — better availability than public API for grok-4.2
+LINGKEAI_BASE = "https://php.lingkeai.vip"
+LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
+LINGKEAI_USER_ID = "9011036"
+LINGKEAI_S6 = "Chengchen@630"
+LINGKEAI_MODEL_IDS = {"grok-4.2": 94}
+
+
+def _encode_lingkeai_token() -> str:
+    timestamp = int(time.time())
+    n = (LINGKEAI_SESSION_TOKEN + "|" + str(timestamp)).encode("utf-8")
+    key = LINGKEAI_S6.encode("utf-8")
+    xored = bytes([n[i] ^ key[i % len(key)] for i in range(len(n))])
+    return base64.b64encode(xored).decode("ascii")
 GEMINI_MODELS = {
     "gemini-3.1-pro-preview", "gemini-3-pro-preview",
     "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview",
@@ -159,6 +176,62 @@ async def _stream_gemini(req: ChatRequest):
     yield "data: [DONE]\n\n"
 
 
+async def _chat_lingkeai(req: ChatRequest) -> str:
+    """Call data999's internal API (php.lingkeai.vip) for grok-4.2.
+    Uses web_search=true which routes through a less-loaded backend."""
+    model_id = LINGKEAI_MODEL_IDS.get(req.model)
+    if not model_id:
+        raise Exception(f"No lingkeai model ID for {req.model}")
+
+    # Format full conversation as a single string for stateless operation
+    parts = []
+    if req.system:
+        parts.append(f"[System: {req.system}]")
+    for m in req.messages:
+        role = "Human" if m.role == "user" else "Assistant"
+        parts.append(f"{role}: {m.content}")
+    user_msg = "\n".join(parts)
+
+    group_id = f"group_{LINGKEAI_USER_ID}_{int(time.time() * 1000)}"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "token": _encode_lingkeai_token(),
+    }
+    body = {
+        "模型id": model_id,
+        "用户消息": user_msg,
+        "渠道分组策略": "成功率优先",
+        "对话组id": group_id,
+        "生成参数": {"web_search": True},
+    }
+
+    full = ""
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream("POST", f"{LINGKEAI_BASE}/moxing/tongyirukouchat",
+                                  headers=headers, json=body) as r:
+            if r.status_code != 200:
+                raise Exception(f"HTTP {r.status_code}")
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                s = line[5:].strip()
+                try:
+                    d = json.loads(s)
+                    if d.get("type") == "error":
+                        raise Exception(d.get("message", "lingkeai error"))
+                    choices = d.get("choices", [])
+                    if choices:
+                        text = choices[0].get("delta", {}).get("content", "")
+                        if text:
+                            full += text
+                except json.JSONDecodeError:
+                    pass
+    if not full:
+        raise Exception("lingkeai returned empty response")
+    return full
+
+
 # ── API endpoints ────────────────────────────────────────────────────────────
 
 @app.post("/api/chat")
@@ -219,8 +292,17 @@ async def chat_sync(req: ChatRequest):
         except Exception:
             pass
 
-    # data999 primary for DATA999_ONLY_MODELS: use non-streaming (streaming is overloaded)
+    # DATA999_ONLY_MODELS: try lingkeai internal API first (better routing), then data999 public
     if req.model in DATA999_ONLY_MODELS:
+        if req.model in LINGKEAI_MODEL_IDS:
+            try:
+                text = await _chat_lingkeai(req)
+                if text:
+                    return {"text": text}
+            except Exception:
+                pass
+
+        # fallback: data999 public API non-streaming
         last_err = "no attempts"
         for attempt in range(3):
             try:
