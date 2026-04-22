@@ -238,15 +238,72 @@ async def _chat_lingkeai(req: ChatRequest) -> str:
     return full
 
 
+async def _stream_lingkeai(req: ChatRequest):
+    """Streaming version of lingkeai for /api/chat endpoint."""
+    model_id = LINGKEAI_MODEL_IDS.get(req.model)
+    if not model_id:
+        raise Exception(f"No lingkeai model ID for {req.model}")
+
+    parts = []
+    if req.system:
+        parts.append(f"[System: {req.system}]")
+    for m in req.messages:
+        role = "Human" if m.role == "user" else "Assistant"
+        parts.append(f"{role}: {m.content}")
+    user_msg = "\n".join(parts)
+
+    group_id = f"group_{LINGKEAI_USER_ID}_{int(time.time() * 1000)}"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "token": _encode_lingkeai_token(),
+    }
+    body = {
+        "模型id": model_id,
+        "用户消息": user_msg,
+        "渠道分组策略": "成功率优先",
+        "对话组id": group_id,
+        "生成参数": {"web_search": req.web_search, "enable_thinking": req.enable_thinking},
+    }
+
+    got_text = False
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream("POST", f"{LINGKEAI_BASE}/moxing/tongyirukouchat",
+                                  headers=headers, json=body) as r:
+            if r.status_code != 200:
+                raise Exception(f"HTTP {r.status_code}")
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                s = line[5:].strip()
+                try:
+                    d = json.loads(s)
+                    if d.get("type") == "error":
+                        raise Exception(d.get("message", "lingkeai error"))
+                    text = ""
+                    if d.get("type") == "content" and d.get("content"):
+                        text = d["content"]
+                    elif d.get("choices"):
+                        text = d["choices"][0].get("delta", {}).get("content", "")
+                    if text:
+                        got_text = True
+                        yield f"data: {json.dumps({'text': text})}\n\n"
+                except json.JSONDecodeError:
+                    pass
+    if not got_text:
+        raise Exception("lingkeai returned empty response")
+    yield "data: [DONE]\n\n"
+
+
 # ── API endpoints ────────────────────────────────────────────────────────────
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    if req.model in CLAUDE_MODELS:
+    if req.model in LINGKEAI_MODEL_IDS:
+        gen = _stream_lingkeai(req)
+    elif req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
     else:
-        # deepwl supports OpenAI-compatible format for all models (incl. Gemini)
-        # _stream_openai already handles deepwl-first + data999 fallback
         gen = _stream_openai(req)
     return StreamingResponse(
         gen, media_type="text/event-stream",

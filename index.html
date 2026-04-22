@@ -772,7 +772,7 @@ createApp({
       scrollBottom()
 
       try {
-        const resp = await fetch('/api/chat/sync', {
+        const resp = await fetch('/api/chat', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
@@ -784,8 +784,25 @@ createApp({
           })
         })
         if (!resp.ok) throw new Error('请求失败 ' + resp.status)
-        const d = await resp.json()
-        chatMessages.value.push({ role:'assistant', content: d.text || '(无内容)' })
+        const reader = resp.body.getReader()
+        const dec = new TextDecoder()
+        let full = ''
+        chatStreaming.value = ''
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          const chunk = dec.decode(value)
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data:')) continue
+            const s = line.slice(5).trim()
+            if (s === '[DONE]') break
+            try {
+              const d = JSON.parse(s)
+              if (d.text) { full += d.text; chatStreaming.value = full; scrollBottom() }
+            } catch {}
+          }
+        }
+        chatMessages.value.push({ role:'assistant', content: full || '(无内容)' })
         chatStreaming.value = ''
       } catch(e) {
         chatMessages.value.push({ role:'assistant', content:'❌ 请求失败：'+e.message })
