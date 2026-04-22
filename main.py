@@ -325,6 +325,8 @@ async def chat(req: ChatRequest):
         gen = _stream_with_fallback(req)
     elif req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
+    elif req.model in GEMINI_MODELS:
+        gen = _stream_gemini(req)
     else:
         gen = _stream_openai(req)
     return StreamingResponse(
@@ -364,18 +366,33 @@ async def chat_sync(req: ChatRequest):
                     pass
         return {"text": full}
 
+    # Gemini: use data999 native Gemini API
+    if req.model in GEMINI_MODELS:
+        gen = _stream_gemini(req)
+        full = ""
+        async for chunk in gen:
+            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                try:
+                    d = json.loads(chunk[6:].strip())
+                    full += d.get("text", "")
+                except Exception:
+                    pass
+        if full:
+            return {"text": full}
+        raise HTTPException(503, detail=f"Gemini {req.model} 暂时不可用")
+
     # deepwl uses different model IDs in some cases
     DEEPWL_ID_MAP = {
         "grok-4.2": "grok-4-2",
         "grok-4.2-image": "grok-4-2-image",
     }
 
-    # Non-Claude, non-data999-only: try deepwl first (30s timeout to fail fast)
+    # Non-Claude/Gemini, non-data999-only: try deepwl first (30s timeout to fail fast)
     if req.model not in DATA999_ONLY_MODELS:
         deepwl_model = DEEPWL_ID_MAP.get(req.model, req.model)
         try:
             headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
-            body = {"model": deepwl_model, "stream": False, "messages": msgs, "network": True, "search": True}
+            body = {"model": deepwl_model, "stream": False, "messages": msgs}
             async with httpx.AsyncClient(timeout=30) as client:
                 r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
             if r.status_code == 200:
