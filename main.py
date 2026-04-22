@@ -249,33 +249,22 @@ async def _stream_lingkeai(req: ChatRequest):
     yield "data: [DONE]\n\n"
 
 
-async def _stream_with_fallback(req: ChatRequest):
-    buf = []
-    try:
-        async for chunk in _stream_lingkeai(req):
-            buf.append(chunk)
-            yield chunk
+async def _stream_lingkeai_only(req: ChatRequest):
+    """Call lingkeai only — no fallback to DATA999 key."""
+    model_id = LINGKEAI_MODEL_IDS.get(req.model)
+    if not model_id:
+        yield f"data: {json.dumps({'text': f'模型 {req.model} 暂不支持，请联系管理员'})}\n\n"
+        yield "data: [DONE]\n\n"
         return
-    except Exception:
-        pass
-    if buf:
-        return
-    if req.model in CLAUDE_MODELS:
-        async for chunk in _stream_claude(req):
-            yield chunk
-    elif req.model in GEMINI_MODELS:
-        async for chunk in _stream_gemini(req):
-            yield chunk
-    else:
-        async for chunk in _stream_openai(req):
-            yield chunk
+    async for chunk in _stream_lingkeai(req):
+        yield chunk
 
 
 # ── API endpoints ────────────────────────────────────────────────────────────
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    gen = _stream_with_fallback(req)
+    gen = _stream_lingkeai_only(req)
     return StreamingResponse(
         gen, media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
