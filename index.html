@@ -408,6 +408,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             <button :class="['web-search-btn', {active: webSearch}]" @click="webSearch=!webSearch" type="button">
               🌐 {{ webSearch ? '联网搜索 ON' : '联网搜索 OFF' }}
             </button>
+            <button :class="['web-search-btn', {active: deepThink}]" @click="deepThink=!deepThink" type="button">
+              🧠 {{ deepThink ? '深度思考 ON' : '深度思考 OFF' }}
+            </button>
           </div>
           <!-- Params row for generation modes -->
           <div class="params-row" v-if="activeCategory!=='chat'">
@@ -619,6 +622,7 @@ createApp({
     const generations = ref([])
     const promptText = ref('')
     const webSearch = ref(false)
+    const deepThink = ref(false)
     const lyricsText = ref('')
     const refs = ref([])
     const paramRatio = ref('9:16')
@@ -776,6 +780,7 @@ createApp({
             messages: chatMessages.value,
             system: chatSystem.value || null,
             web_search: webSearch.value,
+            enable_thinking: deepThink.value,
           })
         })
         if (!resp.ok) throw new Error('请求失败 ' + resp.status)
@@ -1125,7 +1130,7 @@ createApp({
       activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
       chatMessages, chatStreaming, chatSystem, isLoading, generations, currentGenerations,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount,
-      promptText, lyricsText, webSearch, refs, paramRatio, paramDuration, paramMode, paramMusicType,
+      promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
       ratioOptions, durationOptions, balanceText, historyEl, promptEl,
       showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
       refTypeOptions, inputPlaceholder,

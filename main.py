@@ -61,6 +61,7 @@ class ChatRequest(BaseModel):
     messages: List[Message]
     system: Optional[str] = None
     web_search: bool = False
+    enable_thinking: bool = False
 
 
 class GenerateRequest(BaseModel):
@@ -204,7 +205,7 @@ async def _chat_lingkeai(req: ChatRequest) -> str:
         "用户消息": user_msg,
         "渠道分组策略": "成功率优先",
         "对话组id": group_id,
-        "生成参数": {"web_search": req.web_search},
+        "生成参数": {"web_search": req.web_search, "enable_thinking": req.enable_thinking},
     }
 
     full = ""
