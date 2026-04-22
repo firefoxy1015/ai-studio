@@ -22,6 +22,8 @@ CLAUDE_MODELS = {
     "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
 }
+# Models confirmed to work on data999 but not on deepwl — skip deepwl entirely
+DATA999_ONLY_MODELS = {"grok-4.2", "grok-4.2-image"}
 GEMINI_MODELS = {
     "gemini-3.1-pro-preview", "gemini-3-pro-preview",
     "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview",
@@ -199,26 +201,27 @@ async def chat_sync(req: ChatRequest):
         "grok-4.2": "grok-4-2",
         "grok-4.2-image": "grok-4-2-image",
     }
-    deepwl_model = DEEPWL_ID_MAP.get(req.model, req.model)
 
-    # Non-Claude: try deepwl non-streaming (easier to detect errors)
-    try:
-        headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
-        body = {"model": deepwl_model, "stream": False, "messages": msgs}
-        async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
-        if r.status_code == 200:
-            d = r.json()
-            if not d.get("error"):
-                text = d.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    return {"text": text}
-    except Exception:
-        pass
+    # Non-Claude, non-data999-only: try deepwl first (30s timeout to fail fast)
+    if req.model not in DATA999_ONLY_MODELS:
+        deepwl_model = DEEPWL_ID_MAP.get(req.model, req.model)
+        try:
+            headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
+            body = {"model": deepwl_model, "stream": False, "messages": msgs}
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
+            if r.status_code == 200:
+                d = r.json()
+                if not d.get("error"):
+                    text = d.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if text:
+                        return {"text": text}
+        except Exception:
+            pass
 
-    # Fallback: data999, retry up to 3 times
-    ERROR_SIGNALS = ("❌", "ResourceExhausted", "load_shed", "Stream aborted",
-                     "upstream_error", "channel not found", "sampling engine")
+    # data999 fallback (or primary for DATA999_ONLY_MODELS), retry up to 3 times
+    ERROR_SIGNALS = ("ResourceExhausted", "load_shed", "Stream aborted",
+                     "upstream_error", "channel not found", "connect to sampling engine")
     for attempt in range(3):
         try:
             if attempt > 0:
