@@ -297,10 +297,32 @@ async def _stream_lingkeai(req: ChatRequest):
 
 # ── API endpoints ────────────────────────────────────────────────────────────
 
+async def _stream_with_fallback(req: ChatRequest):
+    """Try lingkeai, fall back to data999 if it fails or returns empty."""
+    buf = []
+    try:
+        async for chunk in _stream_lingkeai(req):
+            buf.append(chunk)
+            yield chunk
+        return
+    except Exception:
+        pass
+    # lingkeai failed — fall back
+    if buf:
+        return  # already yielded some content
+    # fallback
+    if req.model in CLAUDE_MODELS:
+        async for chunk in _stream_claude(req):
+            yield chunk
+    else:
+        async for chunk in _stream_openai(req):
+            yield chunk
+
+
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     if req.model in LINGKEAI_MODEL_IDS:
-        gen = _stream_lingkeai(req)
+        gen = _stream_with_fallback(req)
     elif req.model in CLAUDE_MODELS:
         gen = _stream_claude(req)
     else:
