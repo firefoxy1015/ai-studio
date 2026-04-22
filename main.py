@@ -32,7 +32,7 @@ LINGKEAI_BASE = "https://php.lingkeai.vip"
 LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
 LINGKEAI_USER_ID = "9011036"
 LINGKEAI_S6 = "Chengchen@630"
-LINGKEAI_MODEL_IDS = {"grok-4.2": 94, "claude-opus-4-7": 90}
+LINGKEAI_MODEL_IDS = {"grok-4.2": 94, "claude-opus-4-7": 90, "claude-sonnet-4-6": 38}
 
 
 def _encode_lingkeai_token() -> str:
@@ -260,8 +260,8 @@ async def chat_sync(req: ChatRequest):
         msgs.append({"role": "system", "content": req.system})
     msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
 
-    # claude-opus-4-7: use lingkeai (better availability)
-    if req.model == "claude-opus-4-7":
+    # claude-opus-4-7 / claude-sonnet-4-6: use lingkeai (better availability)
+    if req.model in LINGKEAI_MODEL_IDS and req.model in CLAUDE_MODELS:
         try:
             text = await _chat_lingkeai(req)
             if text:
