@@ -30,7 +30,18 @@ LINGKEAI_BASE = "https://php.lingkeai.vip"
 LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
 LINGKEAI_USER_ID = "9011036"
 LINGKEAI_S6 = "Chengchen@630"
-LINGKEAI_MODEL_IDS = {"grok-4.2": 94, "claude-opus-4-7": 90, "gemini-3.1-pro-preview": 39}
+LINGKEAI_MODEL_IDS = {
+    "grok-4.2": 94,
+    "grok-4.2-image": 48,
+    "grok-video-3": 31,
+    "grok-video-3-plus": 63,
+    "claude-opus-4-7": 90,
+    "claude-sonnet-4-6": 38,
+    "claude-opus-4-6": 33,
+    "gemini-3.1-pro-preview": 39,
+    "gemini-3-pro-preview": 5,
+    "doubao-seed-2-0-pro-260215": 40,
+}
 
 GEMINI_MODELS = {
     "gemini-3.1-pro-preview", "gemini-3-pro-preview",
@@ -264,14 +275,7 @@ async def _stream_with_fallback(req: ChatRequest):
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    if req.model in LINGKEAI_MODEL_IDS:
-        gen = _stream_with_fallback(req)
-    elif req.model in CLAUDE_MODELS:
-        gen = _stream_claude(req)
-    elif req.model in GEMINI_MODELS:
-        gen = _stream_gemini(req)
-    else:
-        gen = _stream_openai(req)
+    gen = _stream_with_fallback(req)
     return StreamingResponse(
         gen, media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
