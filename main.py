@@ -193,10 +193,17 @@ async def chat_sync(req: ChatRequest):
                     pass
         return {"text": full}
 
+    # deepwl uses different model IDs in some cases
+    DEEPWL_ID_MAP = {
+        "grok-4.2": "grok-4-2",
+        "grok-4.2-image": "grok-4-2-image",
+    }
+    deepwl_model = DEEPWL_ID_MAP.get(req.model, req.model)
+
     # Non-Claude: try deepwl non-streaming (easier to detect errors)
     try:
         headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
-        body = {"model": req.model, "stream": False, "messages": msgs}
+        body = {"model": deepwl_model, "stream": False, "messages": msgs}
         async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
         if r.status_code == 200:
@@ -209,15 +216,21 @@ async def chat_sync(req: ChatRequest):
         pass
 
     # Fallback: data999
-    full = ""
-    async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
-        if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-            try:
-                d = json.loads(chunk[6:].strip())
-                full += d.get("text", "")
-            except Exception:
-                pass
-    return {"text": full}
+    try:
+        full = ""
+        async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
+            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                try:
+                    d = json.loads(chunk[6:].strip())
+                    full += d.get("text", "")
+                except Exception:
+                    pass
+        if full:
+            return {"text": full}
+    except Exception:
+        pass
+
+    raise HTTPException(503, detail=f"模型 {req.model} 暂时不可用，请稍后重试或切换其他模型")
 
 
 @app.post("/api/generate")
