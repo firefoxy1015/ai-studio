@@ -219,10 +219,35 @@ async def chat_sync(req: ChatRequest):
         except Exception:
             pass
 
-    # data999 fallback (or primary for DATA999_ONLY_MODELS), retry up to 3 times
+    # data999 primary for DATA999_ONLY_MODELS: use non-streaming (streaming is overloaded)
+    if req.model in DATA999_ONLY_MODELS:
+        last_err = "no attempts"
+        for attempt in range(3):
+            try:
+                if attempt > 0:
+                    await asyncio.sleep(2)
+                headers = {"Authorization": f"Bearer {DATA999_KEY}", "Content-Type": "application/json"}
+                body = {"model": req.model, "stream": False, "messages": msgs}
+                async with httpx.AsyncClient(timeout=120) as client:
+                    r = await client.post(f"{DATA999_BASE}/v1/chat/completions", headers=headers, json=body)
+                if r.status_code == 200:
+                    d = r.json()
+                    if not d.get("error"):
+                        text = d.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        if text:
+                            return {"text": text}
+                        last_err = f"attempt {attempt}: empty content, raw={repr(r.text[:200])}"
+                    else:
+                        last_err = f"attempt {attempt}: error={d['error']}"
+                else:
+                    last_err = f"attempt {attempt}: HTTP {r.status_code}"
+            except Exception as e:
+                last_err = f"attempt {attempt}: {type(e).__name__}: {e}"
+        raise HTTPException(503, detail=f"模型 {req.model} 失败: {last_err}")
+
+    # data999 fallback for other models, retry up to 3 times (streaming)
     ERROR_SIGNALS = ("ResourceExhausted", "load_shed", "Stream aborted",
                      "upstream_error", "channel not found", "connect to sampling engine")
-    last_err = "no attempts"
     for attempt in range(3):
         try:
             if attempt > 0:
@@ -237,12 +262,10 @@ async def chat_sync(req: ChatRequest):
                         pass
             if full and not any(s in full for s in ERROR_SIGNALS):
                 return {"text": full}
-            matched = [s for s in ERROR_SIGNALS if s in full]
-            last_err = f"attempt {attempt}: full={repr(full[:200])} matched={matched}"
-        except Exception as e:
-            last_err = f"attempt {attempt}: exception={type(e).__name__}: {e}"
+        except Exception:
+            pass
 
-    raise HTTPException(503, detail=f"模型 {req.model} 失败: {last_err}")
+    raise HTTPException(503, detail=f"模型 {req.model} 暂时不可用，请稍后重试或切换其他模型")
 
 
 @app.post("/api/generate")
