@@ -32,7 +32,7 @@ LINGKEAI_BASE = "https://php.lingkeai.vip"
 LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
 LINGKEAI_USER_ID = "9011036"
 LINGKEAI_S6 = "Chengchen@630"
-LINGKEAI_MODEL_IDS = {"grok-4.2": 94, "claude-opus-4-7": 90, "claude-sonnet-4-6": 38, "claude-opus-4-6": 33, "gemini-3-pro-preview": 5}
+LINGKEAI_MODEL_IDS = {"grok-4.2": 94}
 
 
 def _encode_lingkeai_token() -> str:
