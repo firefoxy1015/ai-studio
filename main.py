@@ -273,114 +273,20 @@ async def chat(req: ChatRequest):
 
 @app.post("/api/chat/sync")
 async def chat_sync(req: ChatRequest):
-    msgs: list = []
-    if req.system:
-        msgs.append({"role": "system", "content": req.system})
-    msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
-
-    # lingkeai models
-    if req.model in LINGKEAI_MODEL_IDS:
-        try:
-            full = ""
-            async for chunk in _stream_lingkeai(req):
-                if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-                    try:
-                        full += json.loads(chunk[6:].strip()).get("text", "")
-                    except Exception:
-                        pass
-            if full:
-                return {"text": full}
-        except Exception:
-            pass
-
-    # Claude
-    if req.model in CLAUDE_MODELS:
-        full = ""
-        async for chunk in _stream_claude(req):
-            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-                try:
-                    full += json.loads(chunk[6:].strip()).get("text", "")
-                except Exception:
-                    pass
-        return {"text": full}
-
-    # Gemini
-    if req.model in GEMINI_MODELS:
-        full = ""
-        async for chunk in _stream_gemini(req):
-            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-                try:
-                    full += json.loads(chunk[6:].strip()).get("text", "")
-                except Exception:
-                    pass
-        if full:
-            return {"text": full}
-        raise HTTPException(503, detail=f"Gemini {req.model} 暂时不可用")
-
-    # grok-4.2 and data999-only models
-    if req.model in DATA999_ONLY_MODELS:
-        last_err = "no attempts"
-        for attempt in range(3):
+    """Sync wrapper — lingkeai only, no DATA999 key."""
+    model_id = LINGKEAI_MODEL_IDS.get(req.model)
+    if not model_id:
+        raise HTTPException(400, detail=f"模型 {req.model} 暂不支持")
+    full = ""
+    async for chunk in _stream_lingkeai(req):
+        if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
             try:
-                if attempt > 0:
-                    await asyncio.sleep(2)
-                r = await http().post(
-                    f"{DATA999_BASE}/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {DATA999_KEY}", "Content-Type": "application/json"},
-                    json={"model": req.model, "stream": False, "messages": msgs},
-                    timeout=120,
-                )
-                if r.status_code == 200:
-                    d = r.json()
-                    if not d.get("error"):
-                        text = d.get("choices", [{}])[0].get("message", {}).get("content", "")
-                        if text:
-                            return {"text": text}
-                    last_err = f"attempt {attempt}: {r.text[:200]}"
-                else:
-                    last_err = f"attempt {attempt}: HTTP {r.status_code}"
-            except Exception as e:
-                last_err = f"attempt {attempt}: {e}"
-        raise HTTPException(503, detail=f"模型 {req.model} 失败: {last_err}")
-
-    # Other models: try deepwl then data999
-    DEEPWL_ID_MAP = {"grok-4.2": "grok-4-2", "grok-4.2-image": "grok-4-2-image"}
-    try:
-        deepwl_model = DEEPWL_ID_MAP.get(req.model, req.model)
-        r = await http().post(
-            f"{DEEPWL_BASE}/v1/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"},
-            json={"model": deepwl_model, "stream": False, "messages": msgs},
-            timeout=30,
-        )
-        if r.status_code == 200:
-            d = r.json()
-            if not d.get("error"):
-                text = d.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    return {"text": text}
-    except Exception:
-        pass
-
-    ERROR_SIGNALS = ("ResourceExhausted", "load_shed", "Stream aborted",
-                     "upstream_error", "channel not found", "connect to sampling engine")
-    for attempt in range(3):
-        try:
-            if attempt > 0:
-                await asyncio.sleep(2)
-            full = ""
-            async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
-                if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-                    try:
-                        full += json.loads(chunk[6:].strip()).get("text", "")
-                    except Exception:
-                        pass
-            if full and not any(s in full for s in ERROR_SIGNALS):
-                return {"text": full}
-        except Exception:
-            pass
-
-    raise HTTPException(503, detail=f"模型 {req.model} 暂时不可用，请稍后重试或切换其他模型")
+                full += json.loads(chunk[6:].strip()).get("text", "")
+            except Exception:
+                pass
+    if not full:
+        raise HTTPException(503, detail=f"lingkeai 返回空响应")
+    return {"text": full}
 
 
 @app.post("/api/generate")
