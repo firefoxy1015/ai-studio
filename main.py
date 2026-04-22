@@ -23,7 +23,7 @@ CLAUDE_MODELS = {
     "claude-haiku-4-5-20251001",
 }
 # Models confirmed to work on data999 but not on deepwl — skip deepwl entirely
-DATA999_ONLY_MODELS = {"grok-4.2", "grok-4.2-image"}
+DATA999_ONLY_MODELS = {"grok-4.2", "grok-4.2-image", "doubao-seed-2-0-pro-260215"}
 GEMINI_MODELS = {
     "gemini-3.1-pro-preview", "gemini-3-pro-preview",
     "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview",
@@ -95,7 +95,7 @@ async def _stream_openai_from(req: ChatRequest, base: str, key: str):
     if req.system:
         msgs.append({"role": "system", "content": req.system})
     msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
-    body = {"model": req.model, "stream": True, "messages": msgs}
+    body = {"model": req.model, "stream": True, "messages": msgs, "network": True, "search": True}
     got_text = False
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream("POST", f"{base}/v1/chat/completions",
@@ -207,7 +207,7 @@ async def chat_sync(req: ChatRequest):
         deepwl_model = DEEPWL_ID_MAP.get(req.model, req.model)
         try:
             headers = {"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"}
-            body = {"model": deepwl_model, "stream": False, "messages": msgs}
+            body = {"model": deepwl_model, "stream": False, "messages": msgs, "network": True, "search": True}
             async with httpx.AsyncClient(timeout=30) as client:
                 r = await client.post(f"{DEEPWL_BASE}/v1/chat/completions", headers=headers, json=body)
             if r.status_code == 200:
