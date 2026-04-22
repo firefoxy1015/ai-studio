@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -215,22 +216,25 @@ async def chat_sync(req: ChatRequest):
     except Exception:
         pass
 
-    # Fallback: data999
-    try:
-        full = ""
-        async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
-            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-                try:
-                    d = json.loads(chunk[6:].strip())
-                    full += d.get("text", "")
-                except Exception:
-                    pass
-        ERROR_SIGNALS = ("❌", "ResourceExhausted", "load_shed", "Stream aborted",
-                         "upstream_error", "channel not found", "sampling engine")
-        if full and not any(s in full for s in ERROR_SIGNALS):
-            return {"text": full}
-    except Exception:
-        pass
+    # Fallback: data999, retry up to 3 times
+    ERROR_SIGNALS = ("❌", "ResourceExhausted", "load_shed", "Stream aborted",
+                     "upstream_error", "channel not found", "sampling engine")
+    for attempt in range(3):
+        try:
+            if attempt > 0:
+                await asyncio.sleep(2)
+            full = ""
+            async for chunk in _stream_openai_from(req, DATA999_BASE, DATA999_KEY):
+                if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                    try:
+                        d = json.loads(chunk[6:].strip())
+                        full += d.get("text", "")
+                    except Exception:
+                        pass
+            if full and not any(s in full for s in ERROR_SIGNALS):
+                return {"text": full}
+        except Exception:
+            pass
 
     raise HTTPException(503, detail=f"模型 {req.model} 暂时不可用，请稍后重试或切换其他模型")
 
