@@ -112,7 +112,7 @@ async def _stream_openai_from(req: ChatRequest, base: str, key: str):
     if req.system:
         msgs.append({"role": "system", "content": req.system})
     msgs.extend([{"role": m.role, "content": m.content} for m in req.messages])
-    body = {"model": req.model, "stream": True, "messages": msgs, "network": True, "search": True}
+    body = {"model": req.model, "stream": True, "messages": msgs}
     got_text = False
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream("POST", f"{base}/v1/chat/completions",
