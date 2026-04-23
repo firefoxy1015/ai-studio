@@ -9,9 +9,18 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="AI Studio")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DATA999_KEY = "sk-37b060cd778ee075ac3388fe421c6df1cc367f591238195c"
 DATA999_BASE = "https://api.ai6700.com"
