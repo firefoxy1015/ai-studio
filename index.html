@@ -743,6 +743,7 @@ createApp({
       const h = chatHistories[id]
       chatMessages.value = h ? h.messages : []
       chatSystem.value = h ? (h.system || '') : ''
+      scrollBottom()
     }
 
     function modelById(id) {
