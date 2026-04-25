@@ -40,16 +40,33 @@ LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
 LINGKEAI_USER_ID = "9011036"
 LINGKEAI_S6 = "Chengchen@630"
 LINGKEAI_MODEL_IDS = {
+    # Grok
     "grok-4.2": 94,
     "grok-4.2-image": 48,
     "grok-video-3": 31,
     "grok-video-3-plus": 63,
+    # Claude
     "claude-opus-4-7": 90,
     "claude-sonnet-4-6": 38,
     "claude-opus-4-6": 33,
+    # Gemini
     "gemini-3.1-pro-preview": 39,
     "gemini-3-pro-preview": 5,
+    # GPT
+    "gpt-5.4": 58,
+    "gpt-5.4-mini": 92,
+    "gpt-5.4-nano": 91,
+    "gpt-5.4-xhigh": 71,
+    # Other
     "doubao-seed-2-0-pro-260215": 40,
+    "qwen3.6-plus": 85,
+    "MiniMax-M2.7": 82,
+}
+
+# Reasoning models need higher max_tokens (thinking chain exhausts budget)
+REASONING_MODELS = {
+    "gpt-5.4-xhigh", "deepseek-r1", "deepseek-r2",
+    "qwq", "qwen3.6-plus", "MiniMax-M2.7",
 }
 
 GEMINI_MODELS = {
@@ -120,12 +137,17 @@ def _lingkeai_body(req: ChatRequest, model_id: int) -> tuple[dict, dict]:
         "Accept": "text/event-stream",
         "token": _encode_lingkeai_token(),
     }
+    max_tokens = 1500 if req.model in REASONING_MODELS else 8192
     body = {
         "模型id": model_id,
         "用户消息": user_msg,
         "渠道分组策略": "成功率优先",
         "对话组id": group_id,
-        "生成参数": {"web_search": req.web_search, "enable_thinking": req.enable_thinking},
+        "生成参数": {
+            "web_search": req.web_search,
+            "enable_thinking": req.enable_thinking,
+            "max_tokens": max_tokens,
+        },
     }
     return headers, body
 
