@@ -97,6 +97,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .thinking-dots span:nth-child(2){animation-delay:.2s}
 .thinking-dots span:nth-child(3){animation-delay:.4s}
 
+/* ── Role Strip ──────────────────────────────────────── */
+.role-strip-outer{border-top:1px solid var(--border);padding:10px 20px 6px;flex-shrink:0;background:var(--bg)}
+.role-strip-scroll{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.role-strip-scroll::-webkit-scrollbar{display:none}
+.role-strip-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;user-select:none}
+.role-strip-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid transparent;transition:border-color .2s,box-shadow .2s;background:var(--card)}
+.role-strip-item:hover .role-strip-avatar{border-color:var(--accent)}
+.role-strip-item.active .role-strip-avatar{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.35)}
+.role-strip-name{font-size:10px;color:var(--muted);white-space:nowrap;max-width:54px;overflow:hidden;text-overflow:ellipsis;text-align:center;transition:color .2s}
+.role-strip-item.active .role-strip-name{color:var(--accent)}
+.role-active-hint{display:flex;align-items:center;gap:6px;padding:4px 8px;margin-bottom:6px;background:rgba(108,92,231,.12);border:1px solid rgba(108,92,231,.3);border-radius:8px;font-size:12px;color:var(--accent)}
+.role-hint-avatar{width:18px;height:18px;border-radius:50%;object-fit:cover}
+.role-hint-clear{cursor:pointer;margin-left:auto;color:var(--muted);font-size:14px;line-height:1;padding:0 2px}
+.role-hint-clear:hover{color:var(--error)}
+
 /* ── Bottom Input ────────────────────────────────────── */
 .input-area{border-top:1px solid var(--border);padding:14px 20px;flex-shrink:0}
 .input-refs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
@@ -382,6 +397,20 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       </template>
     </div>
 
+    <!-- ── Role Strip (video only) ── -->
+    <div class="role-strip-outer" v-if="activeCategory==='video'">
+      <div class="role-strip-scroll">
+        <div v-for="role in VIDEO_ROLES" :key="role.id"
+             class="role-strip-item"
+             :class="{active: selectedRole?.id === role.id}"
+             @click="toggleRole(role)"
+             :title="role.name + '：' + role.desc">
+          <img class="role-strip-avatar" :src="role.avatar" :alt="role.name" loading="lazy">
+          <div class="role-strip-name">{{ role.name }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Bottom Input ── -->
     <div class="input-area" v-if="activeCategory!=='works'">
       <!-- Reference chips -->
@@ -406,6 +435,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             @input="autoResize"
             ref="promptEl"
             rows="2"></textarea>
+          <!-- Role active hint -->
+          <div class="role-active-hint" v-if="activeCategory==='video' && selectedRole">
+            <img :src="selectedRole.avatar" class="role-hint-avatar">
+            <span>{{ selectedRole.name }} 将优化你的提示词</span>
+            <span class="role-hint-clear" @click="selectedRole=null">×</span>
+          </div>
           <!-- Web search toggle for chat mode -->
           <div class="params-row" v-if="activeCategory==='chat'">
             <button :class="['web-search-btn', {active: webSearch}]" @click="webSearch=!webSearch" type="button">
@@ -512,6 +547,37 @@ const IMAGE_MODELS = [
   { id:'mj_imagine',          name:'Midjourney',          desc:'艺术感最强，支持普通/动漫风格',         icon:'🎨', bg:'linear-gradient(135deg,#ec4899,#831843)' },
   { id:'wan2.7-image',        name:'万相 2.7',           desc:'最新版4K，中文语义理解强',             icon:'◉', bg:'linear-gradient(135deg,#ef4444,#7f1d1d)' },
   { id:'wan2.6-image',        name:'万相 2.6',           desc:'风格迁移，中文语义',                   icon:'◉', bg:'linear-gradient(135deg,#dc2626,#7f1d1d)' },
+]
+
+// ── Video Director Roles (from lingkeai /moxing/chat_juese/liebiao) ──────────
+const VIDEO_ROLES = [
+  { id:1,  name:'短视频创意编导', avatar:'https://cos.lingkeai.vip/uploads/2025.12/24/20251224225112_18842e4f57ce6050.png',
+    desc:'将你的模糊想法或图片，智能添加创意，转换成生产级视频提示词。',
+    system:'你是一名专业的短视频创意编导。你的任务是将用户输入的视频想法转化为专业的、详细的英文视频生成提示词。直接输出优化后的提示词，不要任何解释或前缀。' },
+  { id:12, name:'产品广告导演', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412205041_18a59cfda61f8c8c23d1.png',
+    desc:'打造让用户一秒种草的产品广告视频，精通商业视频的视觉说服力',
+    system:'你是一名专业的产品广告导演，精通商业视频的视觉说服力。将用户的产品描述转化为专业的英文广告视频提示词，突出产品质感、光影与场景。直接输出提示词，不要任何解释。' },
+  { id:17, name:'微电影编剧导演', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412204933_18a59cedf864b2fc6b93.png',
+    desc:'将故事构想变成电影级短片分镜，精通叙事结构、情绪转折与电影化视觉语言',
+    system:'你是一名专业的微电影编剧导演，精通叙事结构与电影化视觉语言。将用户的故事想法转化为电影级的英文视频提示词，注重情绪转折与镜头语言。直接输出提示词，不要任何解释。' },
+  { id:15, name:'时尚大片导演', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412204938_18a59cef0c779eac954c.png',
+    desc:'打造秀场级别的时尚视频，精通服装展示、身体语言与视觉美学的极致融合',
+    system:'你是一名专业的时尚大片导演，精通服装展示与视觉美学。将用户的时尚想法转化为高端英文视频提示词，突出优雅、质感与动态美。直接输出提示词，不要任何解释。' },
+  { id:16, name:'动态视觉艺术家', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412204938_18a59cef191c0378e5ae.png',
+    desc:'创造超越现实的视觉奇观，精通抽象动态、流体艺术、光影变幻与超现实运动',
+    system:'你是一名专业的动态视觉艺术家，精通抽象动态与超现实视觉奇观。将用户的想法转化为充满创意的英文视频提示词，突出流体、光影与超现实美感。直接输出提示词，不要任何解释。' },
+  { id:10, name:'美食短视频导演', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412205217_18a59d13f2803d9083b8.png',
+    desc:'将食物变成让人流口水的视觉盛宴，专精美食订餐视频、食谱短片和餐饮广告',
+    system:'你是一名专业的美食短视频导演，将食物转化为让人流口水的视觉盛宴。将用户的美食描述转化为专业的英文视频提示词，突出食物质感、色彩与诱人感。直接输出提示词，不要任何解释。' },
+  { id:13, name:'音乐MV导演', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412204933_18a59cedee5582f0c4d8.png',
+    desc:'打造视觉与音乐完美共振的MV画面，精通节奏可视化、超现实视觉与情绪转译',
+    system:'你是一名专业的音乐MV导演，精通节奏可视化与情绪转译。将用户的想法转化为充满节奏感的英文MV视频提示词，突出音乐律动与视觉情绪。直接输出提示词，不要任何解释。' },
+  { id:14, name:'自然纪录片编导', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412204949_18a59cf179a77f90847a.png',
+    desc:'用大制作级镜头语言展现自然的壮美与神秘，精通野生动物、地质奇观、天文现象',
+    system:'你是一名专业的自然纪录片编导，用大制作镜头语言展现自然壮美。将用户的自然主题转化为专业的英文纪录片视频提示词，突出宏观壮丽与细节神秘感。直接输出提示词，不要任何解释。' },
+  { id:11, name:'旅行Vlog编导', avatar:'https://cos.lingkeai.vip/uploads/2026.04/12/20260412204934_18a59cee1174f5186efa.png',
+    desc:'打造"没有一帧废镜头"的旅行视频，精通转场、节奏、以及用镜头语言讲故事',
+    system:'你是一名专业的旅行Vlog编导，打造没有废镜头的旅行视频。将用户的旅行描述转化为充满故事感的英文视频提示词，突出转场、节奏与场景变化。直接输出提示词，不要任何解释。' },
 ]
 
 const VIDEO_MODELS = [
@@ -626,6 +692,7 @@ createApp({
     const isLoading = computed(() => !!loadingModels[selectedModelId.value])
     const generations = ref([])
     const promptText = ref('')
+    const selectedRole = ref(null)
     const webSearch = ref(false)
     const deepThink = ref(false)
     const lyricsText = ref('')
@@ -730,6 +797,7 @@ createApp({
 
     function switchCategory(cat) {
       activeCategory.value = cat
+      selectedRole.value = null
       if (cat === 'works') return
       const models = cat==='chat'?CHAT_MODELS:cat==='image'?IMAGE_MODELS:cat==='video'?VIDEO_MODELS:MUSIC_MODELS
       if (models.length) selectedModelId.value = models[0].id
@@ -824,9 +892,28 @@ createApp({
       const m = selectedModel.value
       if (!m) return
 
-      const prompt = promptText.value.trim()
+      let prompt = promptText.value.trim()
       promptText.value = ''
       loadingModels[m.id] = true
+
+      // Role-based prompt enhancement
+      if (selectedRole.value) {
+        try {
+          const r = await fetch('/api/chat/sync', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-6',
+              messages: [{role:'user', content: prompt}],
+              system: selectedRole.value.system,
+            })
+          })
+          if (r.ok) {
+            const d = await r.json()
+            if (d.text) prompt = d.text
+          }
+        } catch(_) {}
+      }
 
       // Build params
       const params = buildParams(m)
@@ -1020,6 +1107,10 @@ createApp({
       e.target.value = ''
     }
 
+    function toggleRole(role) {
+      selectedRole.value = selectedRole.value?.id === role.id ? null : role
+    }
+
     function rerun(g) {
       promptText.value = g.prompt
       selectedModelId.value = g.modelId
@@ -1154,6 +1245,7 @@ createApp({
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
+      selectedRole, toggleRole, VIDEO_ROLES,
       ratioOptions, durationOptions, balanceText, historyEl, promptEl,
       showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
       refTypeOptions, inputPlaceholder,
