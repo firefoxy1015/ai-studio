@@ -101,16 +101,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .role-strip-outer{border-top:1px solid var(--border);padding:10px 20px 6px;flex-shrink:0;background:var(--bg)}
 .role-strip-scroll{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .role-strip-scroll::-webkit-scrollbar{display:none}
-.role-strip-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;user-select:none}
+.role-strip-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;user-select:none}
 .role-strip-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid transparent;transition:border-color .2s,box-shadow .2s;background:var(--card)}
 .role-strip-item:hover .role-strip-avatar{border-color:var(--accent)}
 .role-strip-item.active .role-strip-avatar{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.35)}
-.role-strip-name{font-size:10px;color:var(--muted);white-space:nowrap;max-width:54px;overflow:hidden;text-overflow:ellipsis;text-align:center;transition:color .2s}
-.role-strip-item.active .role-strip-name{color:var(--accent)}
-.role-active-hint{display:flex;align-items:center;gap:6px;padding:4px 8px;margin-bottom:6px;background:rgba(108,92,231,.12);border:1px solid rgba(108,92,231,.3);border-radius:8px;font-size:12px;color:var(--accent)}
-.role-hint-avatar{width:18px;height:18px;border-radius:50%;object-fit:cover}
-.role-hint-clear{cursor:pointer;margin-left:auto;color:var(--muted);font-size:14px;line-height:1;padding:0 2px}
-.role-hint-clear:hover{color:var(--error)}
+.role-popover{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1e1e2e;border:1px solid var(--border);border-radius:10px;padding:10px 12px;width:180px;z-index:100;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+.role-popover::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#1e1e2e}
+.role-popover-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.role-popover-desc{font-size:11px;color:var(--muted);line-height:1.5}
 
 /* ── Bottom Input ────────────────────────────────────── */
 .input-area{border-top:1px solid var(--border);padding:14px 20px;flex-shrink:0}
@@ -398,15 +396,18 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     </div>
 
     <!-- ── Role Strip (video only) ── -->
-    <div class="role-strip-outer" v-if="activeCategory==='video'">
+    <div class="role-strip-outer" v-if="activeCategory==='video'" @click.self="rolePopover=null">
       <div class="role-strip-scroll">
         <div v-for="role in VIDEO_ROLES" :key="role.id"
              class="role-strip-item"
              :class="{active: selectedRole?.id === role.id}"
-             @click="toggleRole(role)"
-             :title="role.name + '：' + role.desc">
+             @click.stop="toggleRole(role)">
+          <!-- Popover card -->
+          <div class="role-popover" v-if="rolePopover?.id === role.id">
+            <div class="role-popover-name">{{ role.name }}</div>
+            <div class="role-popover-desc">{{ role.desc }}</div>
+          </div>
           <img class="role-strip-avatar" :src="role.avatar" :alt="role.name" loading="lazy">
-          <div class="role-strip-name">{{ role.name }}</div>
         </div>
       </div>
     </div>
@@ -435,12 +436,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             @input="autoResize"
             ref="promptEl"
             rows="2"></textarea>
-          <!-- Role active hint -->
-          <div class="role-active-hint" v-if="activeCategory==='video' && selectedRole">
-            <img :src="selectedRole.avatar" class="role-hint-avatar">
-            <span>{{ selectedRole.name }} 将优化你的提示词</span>
-            <span class="role-hint-clear" @click="selectedRole=null">×</span>
-          </div>
           <!-- Web search toggle for chat mode -->
           <div class="params-row" v-if="activeCategory==='chat'">
             <button :class="['web-search-btn', {active: webSearch}]" @click="webSearch=!webSearch" type="button">
@@ -693,6 +688,7 @@ createApp({
     const generations = ref([])
     const promptText = ref('')
     const selectedRole = ref(null)
+    const rolePopover = ref(null)
     const webSearch = ref(false)
     const deepThink = ref(false)
     const lyricsText = ref('')
@@ -1108,7 +1104,13 @@ createApp({
     }
 
     function toggleRole(role) {
-      selectedRole.value = selectedRole.value?.id === role.id ? null : role
+      if (selectedRole.value?.id === role.id) {
+        selectedRole.value = null
+        rolePopover.value = null
+      } else {
+        selectedRole.value = role
+        rolePopover.value = role
+      }
     }
 
     function rerun(g) {
@@ -1245,7 +1247,7 @@ createApp({
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
-      selectedRole, toggleRole, VIDEO_ROLES,
+      selectedRole, rolePopover, toggleRole, VIDEO_ROLES,
       ratioOptions, durationOptions, balanceText, historyEl, promptEl,
       showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
       refTypeOptions, inputPlaceholder,
