@@ -1725,6 +1725,11 @@ createApp({
     }
 
     async function agentTaskRerun(task) {
+      // Concat task: re-call /api/manga/concat
+      if (task.phase === 'concat') {
+        await runConcatTask(task)
+        return
+      }
       // Upgrade legacy params for doubao-seedance tasks saved before the param-fix.
       // Old shape: {duration, aspect_ratio} → new: {audio_duration, ratio, resolution, generate_audio}
       if (task.model === 'doubao-seedance-1-5-pro-251215') {
@@ -1990,30 +1995,56 @@ createApp({
           const concatTask = reactive({
             label: `🎞️ 最终成片 · ${goodClips.length} 段拼接`,
             category: 'video', phase: 'concat',
+            sourceClips: goodClips,
             status: 'loading', progress: 30, progressText: '下载片段并合成...',
             results: [], error: null,
           })
           allTasks.push(concatTask)
           prodStage.tasks  = allTasks
           agentTasks.value = allTasks
-          try {
-            const r = await fetch('/api/manga/concat', {
-              method: 'POST', headers: {'Content-Type':'application/json'},
-              body: JSON.stringify({ video_urls: goodClips })
-            })
-            const j = await r.json()
-            if (j.url) {
-              concatTask.results = [j.url]; concatTask.status = 'done'; concatTask.progress = 100
-              concatTask.progressText = '成片完成'
-            } else throw new Error(j.detail || '合成失败')
-          } catch(e) {
-            concatTask.status = 'error'; concatTask.error = String(e?.message || e)
-          }
+          await runConcatTask(concatTask)
         }
       }
 
       prodStage.status = 'done'
       agentPhase.value = 3
+    }
+
+    // Reusable: run (or re-run) a concat task
+    async function runConcatTask(task) {
+      task.status = 'loading'
+      task.progress = 30
+      task.progressText = '下载片段并合成...'
+      task.error = null
+      try {
+        const r = await fetch('/api/manga/concat', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ video_urls: task.sourceClips || [] })
+        })
+        const txt = await r.text()
+        let j = null
+        try { j = JSON.parse(txt) } catch(_) { j = { detail: txt } }
+        if (r.ok && j?.url) {
+          task.results = [j.url]; task.status = 'done'; task.progress = 100
+          task.progressText = '成片完成'
+        } else {
+          // Pretty-print FastAPI 422 array errors / nested objects
+          let msg = ''
+          if (Array.isArray(j?.detail)) {
+            msg = j.detail.map(d => `${(d.loc||[]).join('.')}: ${d.msg||JSON.stringify(d)}`).join('; ')
+          } else if (typeof j?.detail === 'string') {
+            msg = j.detail
+          } else if (j?.detail) {
+            msg = JSON.stringify(j.detail)
+          } else {
+            msg = `HTTP ${r.status}: ${txt.slice(0, 200)}`
+          }
+          throw new Error(msg)
+        }
+      } catch(e) {
+        task.status = 'error'
+        task.error = String(e?.message || e).slice(0, 400)
+      }
     }
 
     function mangaReset() {
