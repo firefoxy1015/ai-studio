@@ -264,6 +264,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .agent-hero-feat-desc{font-size:12px;color:var(--muted);line-height:1.6}
 .agent-hero-hint{flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);gap:6px;padding:20px}
 .agent-hero-hint kbd{background:var(--card);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:11px;font-family:monospace;color:var(--text)}
+.agent-hero-settings{margin:12px 24px;padding:18px;background:linear-gradient(135deg,rgba(108,92,231,.08),rgba(0,206,201,.04));border:1px solid var(--border);border-radius:14px}
+.agent-hero-settings-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;letter-spacing:.3px}
+.hero-set-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.hero-set-cell.wide{grid-column:1/-1}
+.hero-set-lbl{font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500}
+.hero-set-lbl small{color:var(--muted);opacity:.65;font-weight:400;margin-left:4px}
+.hero-set-spin{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:4px 10px}
+.hero-set-spin button{background:transparent;border:none;color:var(--accent);font-size:18px;width:24px;height:24px;cursor:pointer;font-weight:600;transition:opacity .15s}
+.hero-set-spin button:hover{opacity:.7}
+.hero-set-spin span{min-width:60px;text-align:center;font-size:13px;color:var(--text);font-weight:500}
+.hero-set-chips{display:flex;gap:6px}
+.hero-set-chips.wrap{flex-wrap:wrap}
+.hero-set-chips button{background:var(--card);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.hero-set-chips button:hover{border-color:var(--accent);color:var(--text)}
+.hero-set-chips button.active{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:#fff;font-weight:500}
 /* Agent Messages */
 .agent-msgs{padding:20px;max-width:720px;margin:0 auto}
 .agent-msg{margin-bottom:16px}
@@ -594,6 +609,58 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
                 <div class="agent-hero-feat-num" :style="{color: agentSelected.accentColor}">{{f.num}}</div>
                 <div class="agent-hero-feat-title">{{f.title}}</div>
                 <div class="agent-hero-feat-desc">{{f.desc}}</div>
+              </div>
+            </div>
+            <!-- Inline manga settings card (always visible at phase 0 for manga agents) -->
+            <div v-if="isMangaAgent" class="agent-hero-settings">
+              <div class="agent-hero-settings-title">⚙ 制作参数（直接调整即可，无需打开侧栏）</div>
+              <div class="hero-set-grid">
+                <div class="hero-set-cell">
+                  <div class="hero-set-lbl">分镜数量</div>
+                  <div class="hero-set-spin">
+                    <button @click="mangaSettings.shotCount=Math.max(3,mangaSettings.shotCount-1)">−</button>
+                    <span>{{mangaSettings.shotCount}} 帧</span>
+                    <button @click="mangaSettings.shotCount=Math.min(10,mangaSettings.shotCount+1)">+</button>
+                  </div>
+                </div>
+                <div class="hero-set-cell">
+                  <div class="hero-set-lbl">每帧默认时长</div>
+                  <div class="hero-set-chips">
+                    <button v-for="d in [4,5,6,8,10,12]" :key="d"
+                            :class="{active:mangaSettings.defaultDuration===d}"
+                            @click="mangaSettings.defaultDuration=d">{{d}}s</button>
+                  </div>
+                </div>
+                <div class="hero-set-cell">
+                  <div class="hero-set-lbl">视频比例</div>
+                  <div class="hero-set-chips">
+                    <button :class="{active:mangaSettings.ratio==='9:16'}" @click="mangaSettings.ratio='9:16'">🎬 9:16</button>
+                    <button :class="{active:mangaSettings.ratio==='16:9'}" @click="mangaSettings.ratio='16:9'">🖥 16:9</button>
+                    <button :class="{active:mangaSettings.ratio==='1:1'}"  @click="mangaSettings.ratio='1:1'">⬛ 1:1</button>
+                  </div>
+                </div>
+                <div class="hero-set-cell wide">
+                  <div class="hero-set-lbl">画面风格 <small>(可多选，让 AI 在创意方向中体现)</small></div>
+                  <div class="hero-set-chips wrap">
+                    <button v-for="s in mangaStylePresets" :key="s"
+                            :class="{active:mangaSettings.visualStyles.includes(s)}"
+                            @click="toggleMangaStyle(s)">{{s}}</button>
+                  </div>
+                </div>
+                <div class="hero-set-cell">
+                  <div class="hero-set-lbl">首尾帧链接 <small>(更连贯)</small></div>
+                  <div class="hero-set-chips">
+                    <button :class="{active:!mangaSettings.chainFrame}" @click="mangaSettings.chainFrame=false">关 (并行快)</button>
+                    <button :class="{active:mangaSettings.chainFrame}" @click="mangaSettings.chainFrame=true">开 (顺序连贯)</button>
+                  </div>
+                </div>
+                <div class="hero-set-cell">
+                  <div class="hero-set-lbl">自动剪辑成片</div>
+                  <div class="hero-set-chips">
+                    <button :class="{active:!mangaSettings.autoConcat}" @click="mangaSettings.autoConcat=false">关</button>
+                    <button :class="{active:mangaSettings.autoConcat}" @click="mangaSettings.autoConcat=true">开</button>
+                  </div>
+                </div>
               </div>
             </div>
             <!-- start hint -->
