@@ -875,41 +875,88 @@ async def manga_concat(req: ConcatRequest):
                     raise HTTPException(400, f"clip {i} too small ({_os.path.getsize(p)} bytes), likely a broken URL")
                 local_paths.append(p)
 
-            # 2) Re-encode every clip to identical params (1080p, h264 yuv420p, aac 44k stereo)
+            # 2) Re-encode every clip to identical params.
+            # Render free-tier CPU is slow → use ultrafast + 720p + crf 28 to fit in time budget.
+            # Target: 720x1280 vertical (most common for manga); pad shorter side, crop longer side.
             normalized: List[str] = []
             for i, src in enumerate(local_paths):
                 dst = _os.path.join(td, f"norm_{i:03d}.mp4")
                 cmd = [
                     ffbin, "-y", "-i", src,
-                    "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,"
-                           "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1",
-                    "-r", "30",
-                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                    "-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.1",
-                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+                    # Scale longest edge to 1280, pad to 720x1280 (vertical) or letterbox naturally.
+                    # Using a uniform output box; mismatched aspect ratios get letterboxed (black bars).
+                    "-vf", "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease,"
+                           "pad=ceil(iw/2)*2:ceil(ih/2)*2,setsar=1",
+                    "-r", "24",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                    "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-ac", "2",
                     "-movflags", "+faststart",
+                    "-threads", "2",
                     dst,
                 ]
-                proc = subprocess.run(cmd, capture_output=True, timeout=600)
+                proc = subprocess.run(cmd, capture_output=True, timeout=180)
                 if proc.returncode != 0 or not _os.path.exists(dst) or _os.path.getsize(dst) < 1024:
                     err = proc.stderr.decode("utf-8", "ignore")[-500:]
                     raise HTTPException(500, f"ffmpeg normalize clip{i} failed: {err}")
                 debug_log.append(f"norm{i}: {_os.path.getsize(dst)} bytes")
                 normalized.append(dst)
 
-            # 3) Concat demuxer (all clips already identical → safe stream copy)
-            list_path = _os.path.join(td, "files.txt")
-            with open(list_path, "w", encoding="utf-8") as f:
-                for n in normalized:
-                    safe = n.replace("\\", "/").replace("'", "'\\''")
-                    f.write(f"file '{safe}'\n")
+            # NOTE: clips may now have different dimensions (we kept original aspect).
+            # If they differ, concat-demuxer with -c copy will fail. Detect and either:
+            #   - all same → fast stream-copy concat
+            #   - different → use concat filter with re-scale (slower but correct)
+            sizes = set()
+            for n in normalized:
+                probe = subprocess.run(
+                    [ffbin, "-i", n], capture_output=True, timeout=30
+                )
+                err = probe.stderr.decode("utf-8", "ignore")
+                m = re.search(r"(\d{2,5})x(\d{2,5})", err)
+                if m:
+                    sizes.add((int(m.group(1)), int(m.group(2))))
+            uniform = len(sizes) <= 1
+            debug_log.append(f"sizes={sizes} uniform={uniform}")
 
             out_path = _os.path.join(td, "final.mp4")
-            cmd2 = [
-                ffbin, "-y", "-f", "concat", "-safe", "0", "-i", list_path,
-                "-c", "copy", "-movflags", "+faststart", out_path,
-            ]
-            proc2 = subprocess.run(cmd2, capture_output=True, timeout=600)
+            if uniform:
+                # 3a) Fast path: stream-copy concat
+                list_path = _os.path.join(td, "files.txt")
+                with open(list_path, "w", encoding="utf-8") as f:
+                    for n in normalized:
+                        safe = n.replace("\\", "/").replace("'", "'\\''")
+                        f.write(f"file '{safe}'\n")
+                cmd2 = [
+                    ffbin, "-y", "-f", "concat", "-safe", "0", "-i", list_path,
+                    "-c", "copy", "-movflags", "+faststart", out_path,
+                ]
+            else:
+                # 3b) Mixed sizes → concat filter with rescale to first clip's size
+                tw, th = next(iter(sizes))
+                inputs: List[str] = []
+                for n in normalized:
+                    inputs.extend(["-i", n])
+                # Build filter graph: scale each + concat
+                fc_parts = []
+                for idx in range(len(normalized)):
+                    fc_parts.append(
+                        f"[{idx}:v]scale={tw}:{th}:force_original_aspect_ratio=decrease,"
+                        f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1[v{idx}];"
+                    )
+                concat_in = "".join(f"[v{idx}][{idx}:a]" for idx in range(len(normalized)))
+                fc = "".join(fc_parts) + f"{concat_in}concat=n={len(normalized)}:v=1:a=1[v][a]"
+                cmd2 = [
+                    ffbin, "-y", *inputs,
+                    "-filter_complex", fc,
+                    "-map", "[v]", "-map", "[a]",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                    "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "96k",
+                    "-movflags", "+faststart",
+                    "-threads", "2",
+                    out_path,
+                ]
+            proc2 = subprocess.run(cmd2, capture_output=True, timeout=300)
             if proc2.returncode != 0 or not _os.path.exists(out_path):
                 err = proc2.stderr.decode("utf-8", "ignore")[-500:]
                 raise HTTPException(500, f"ffmpeg concat failed: {err}")
