@@ -837,57 +837,99 @@ class ConcatRequest(BaseModel):
 
 @app.post("/api/manga/concat")
 async def manga_concat(req: ConcatRequest):
-    """Download multiple video clips and concatenate them into a single MP4."""
+    """Download multiple video clips and concatenate them into a single MP4.
+
+    Strategy: download → re-encode each to identical params → concat demuxer
+    (concat filter would also work but uses more RAM; demuxer with identical
+    params is the most reliable approach across mixed CDN sources).
+    """
     import subprocess, tempfile, os as _os
     if not req.video_urls or len(req.video_urls) < 2:
         raise HTTPException(400, "Need at least 2 video URLs")
+
+    ffbin = _ffmpeg_bin()
+    debug_log: List[str] = []
     try:
         with tempfile.TemporaryDirectory() as td:
+            # 1) Download every clip
             local_paths: List[str] = []
             for i, url in enumerate(req.video_urls):
                 p = _os.path.join(td, f"clip_{i:03d}.mp4")
-                async with http().stream("GET", url, timeout=300) as resp:
-                    if resp.status_code != 200:
-                        raise HTTPException(400, f"Cannot fetch clip {i}: HTTP {resp.status_code}")
-                    with open(p, "wb") as f:
-                        async for chunk in resp.aiter_bytes():
-                            f.write(chunk)
+                try:
+                    async with http().stream(
+                        "GET", url, timeout=300,
+                        follow_redirects=True,
+                        headers={"User-Agent": "Mozilla/5.0"},
+                    ) as resp:
+                        if resp.status_code != 200:
+                            raise HTTPException(400, f"clip {i} download failed: HTTP {resp.status_code} from {url[:80]}")
+                        size = 0
+                        with open(p, "wb") as f:
+                            async for chunk in resp.aiter_bytes():
+                                f.write(chunk)
+                                size += len(chunk)
+                        debug_log.append(f"clip{i}: {size} bytes from {url[:60]}")
+                except httpx.HTTPError as he:
+                    raise HTTPException(400, f"clip {i} network error: {he}")
+                if _os.path.getsize(p) < 1024:
+                    raise HTTPException(400, f"clip {i} too small ({_os.path.getsize(p)} bytes), likely a broken URL")
                 local_paths.append(p)
 
-            # Re-encode each clip to a uniform format then concat (handles mixed codecs/sizes)
+            # 2) Re-encode every clip to identical params (1080p, h264 yuv420p, aac 44k stereo)
             normalized: List[str] = []
             for i, src in enumerate(local_paths):
-                dst = _os.path.join(td, f"norm_{i:03d}.ts")
+                dst = _os.path.join(td, f"norm_{i:03d}.mp4")
                 cmd = [
-                    _ffmpeg_bin(), "-y", "-i", src,
+                    ffbin, "-y", "-i", src,
+                    "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,"
+                           "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1",
+                    "-r", "30",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-                    "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", dst,
+                    "-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.1",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+                    "-movflags", "+faststart",
+                    dst,
                 ]
-                proc = subprocess.run(cmd, capture_output=True, timeout=300)
-                if proc.returncode != 0 or not _os.path.exists(dst):
-                    raise HTTPException(500, f"ffmpeg normalize {i} failed: {proc.stderr.decode('utf-8','ignore')[:200]}")
+                proc = subprocess.run(cmd, capture_output=True, timeout=600)
+                if proc.returncode != 0 or not _os.path.exists(dst) or _os.path.getsize(dst) < 1024:
+                    err = proc.stderr.decode("utf-8", "ignore")[-500:]
+                    raise HTTPException(500, f"ffmpeg normalize clip{i} failed: {err}")
+                debug_log.append(f"norm{i}: {_os.path.getsize(dst)} bytes")
                 normalized.append(dst)
 
-            concat_input = "concat:" + "|".join(normalized)
+            # 3) Concat demuxer (all clips already identical → safe stream copy)
+            list_path = _os.path.join(td, "files.txt")
+            with open(list_path, "w", encoding="utf-8") as f:
+                for n in normalized:
+                    safe = n.replace("\\", "/").replace("'", "'\\''")
+                    f.write(f"file '{safe}'\n")
+
             out_path = _os.path.join(td, "final.mp4")
             cmd2 = [
-                _ffmpeg_bin(), "-y", "-i", concat_input,
-                "-c", "copy", "-bsf:a", "aac_adtstoasc", out_path,
+                ffbin, "-y", "-f", "concat", "-safe", "0", "-i", list_path,
+                "-c", "copy", "-movflags", "+faststart", out_path,
             ]
-            proc2 = subprocess.run(cmd2, capture_output=True, timeout=300)
+            proc2 = subprocess.run(cmd2, capture_output=True, timeout=600)
             if proc2.returncode != 0 or not _os.path.exists(out_path):
-                raise HTTPException(500, f"ffmpeg concat failed: {proc2.stderr.decode('utf-8','ignore')[:200]}")
+                err = proc2.stderr.decode("utf-8", "ignore")[-500:]
+                raise HTTPException(500, f"ffmpeg concat failed: {err}")
+
+            final_size = _os.path.getsize(out_path)
+            debug_log.append(f"final: {final_size} bytes")
             with open(out_path, "rb") as f:
                 final_bytes = f.read()
 
-        url = await _upload_to_tmpfiles(final_bytes, "manga_final.mp4", "video/mp4")
-        return {"url": url, "size": len(final_bytes), "clips": len(req.video_urls)}
+        try:
+            url = await _upload_to_tmpfiles(final_bytes, "manga_final.mp4", "video/mp4")
+        except Exception as ue:
+            raise HTTPException(500, f"upload to tmpfiles failed: {ue}")
+
+        return {"url": url, "size": final_size, "clips": len(req.video_urls), "log": debug_log}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"concat error: {e}")
+        import traceback
+        raise HTTPException(500, f"concat error: {type(e).__name__}: {e} | log={debug_log}")
 
 
 @app.get("/api/balance")
