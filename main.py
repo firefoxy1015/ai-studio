@@ -431,7 +431,7 @@ MANGA_STAGE_PROMPTS: Dict[str, str] = {
         "三个方向必须有明显差异，覆盖不同情感基调。"
     ),
     "storyboard": (
-        "你是AI漫剧S2.0的首席分镜师。基于选定的创意方向，创作5帧分镜脚本。\n\n"
+        "你是AI漫剧S2.0的首席分镜师。基于选定的创意方向，按用户硬性参数（帧数和时长）创作分镜脚本。\n\n"
         "⚠️ 关键一致性要求（每帧 image_prompt 必须 100% 包含）：\n"
         "1. **角色锚定**：每帧用完全相同的角色描述（外观/颜色/品种/服装/特征），不能改一个字\n"
         "2. **画风锚定**：基于意图分析的 visual_style 和方向的 visual_keyword，每帧画风描述完全相同\n"
@@ -439,42 +439,42 @@ MANGA_STAGE_PROMPTS: Dict[str, str] = {
         "示例（橘猫故事）：每帧 image_prompt 都要这样开头：\n"
         "「一只橙色短毛橘猫，圆绿眼，白色胸口和爪尖，温馨日式手绘插画风，暖橙阳光色调」\n"
         "然后再描述这一帧的具体场景/动作/构图。\n\n"
-        "直接返回JSON数组（不要markdown代码块），5帧：\n"
+        "直接返回JSON数组（不要markdown代码块），帧数严格按用户参数：\n"
         '[{"shot":1,"title":"分镜标题（5字内）","scene":"场景描述",'
         '"characters":["出境角色"],"action":"主要动作和画面变化",'
         '"dialogue":"台词或旁白（可为空字符串）","camera":"特写/中景/远景/全景",'
         '"duration":5,"image_prompt":"必须以【完全相同的角色+画风+色调】开头，再加该帧场景动作，100-130字",'
         '"video_prompt":"English video prompt（camera movement + scene dynamics + atmosphere，40-60 words）"}]\n'
-        "分镜要有完整故事弧：开篇铺垫→发展→冲突→高潮→结尾。"
+        "分镜要有完整故事弧：开篇铺垫→发展→冲突→高潮→结尾。帧数和每帧 duration 严格按用户硬性参数。"
     ),
     "plot_storyboard": (
-        "你是AI漫剧导演。将用户提供的剧情文案转化为5帧分镜脚本，保持情感主线和故事张力。\n\n"
+        "你是AI漫剧导演。将用户提供的剧情文案转化为分镜脚本（帧数和时长按用户硬性参数），保持情感主线和故事张力。\n\n"
         "⚠️ 关键一致性要求（每帧 image_prompt 必须 100% 包含完全相同的开头）：\n"
         "1. **角色锚定**：每帧用完全相同的角色描述（外观/服装/特征），不能改一个字\n"
         "2. **画风锚定**：每帧画风描述完全相同（如：电影感写实/温馨手绘插画/赛博朋克）\n"
         "3. **色调锚定**：色温色调每帧统一\n\n"
         "image_prompt 示例开头：「[完全相同的角色描述]，[相同画风]，[相同色调]，」+ 该帧具体场景动作\n\n"
-        "直接返回JSON数组（不要markdown代码块），5帧：\n"
+        "直接返回JSON数组（不要markdown代码块），帧数严格按用户参数：\n"
         '[{"shot":1,"title":"分镜标题（5字内）","scene":"场景描述",'
         '"characters":["出境角色"],"action":"主要动作",'
         '"dialogue":"台词或旁白（可为空字符串）","camera":"特写/中景/远景/全景",'
         '"duration":5,"image_prompt":"必须以【完全相同的角色+画风+色调】开头，再加该帧场景，100-130字",'
         '"video_prompt":"English video prompt（40-60 words）"}]\n'
-        "忠于原文情感，镜头语言丰富，有电影感。"
+        "忠于原文情感，镜头语言丰富，有电影感。帧数和每帧 duration 严格按用户硬性参数。"
     ),
     "narration_storyboard": (
-        "你是抖音解说视频导演。将用户内容拆解为5个解说视频片段，每段配合具体的视觉画面。\n\n"
+        "你是抖音解说视频导演。将用户内容拆解为解说视频片段（数量按用户参数），每段配合具体的视觉画面。\n\n"
         "⚠️ 关键一致性要求（每帧 image_prompt 必须 100% 包含相同的开头）：\n"
         "1. **风格锚定**：每帧使用完全相同的视觉风格描述（如：抖音爆款/赛博霓虹/复古胶片）\n"
         "2. **色调锚定**：色温色调每帧统一\n\n"
         "image_prompt 示例开头：「[相同视觉风格]，[相同色调]，」+ 该帧场景\n\n"
-        "直接返回JSON数组（不要markdown代码块），5帧：\n"
+        "直接返回JSON数组（不要markdown代码块），片段数严格按用户参数：\n"
         '[{"shot":1,"title":"片段标题（5字内）","scene":"视觉场景描述",'
         '"narration":"解说文字（15-25字，口语化有钩子）","action":"画面主要动作",'
         '"camera":"特写/中景/远景","duration":5,'
         '"image_prompt":"必须以【相同的风格+色调】开头，再加该帧场景，80-110字",'
         '"video_prompt":"English video prompt（40-60 words）"}]\n'
-        "解说节奏快、有悬念、视觉冲击强，契合抖音调性。"
+        "解说节奏快、有悬念、视觉冲击强，契合抖音调性。片段数和每段 duration 严格按用户硬性参数。"
     ),
 }
 
@@ -500,12 +500,31 @@ async def manga_stage_endpoint(req: MangaStageRequest):
     elif stage == "directions":
         parts.append(f"原始创意：{ctx.get('text', '')}")
         parts.append(f"意图分析结果：{json.dumps(ctx.get('intent_result', {}), ensure_ascii=False)}")
+        styles = req.settings.get("visualStyles") or []
+        if styles:
+            parts.append(
+                f"⚠ 用户已勾选画面风格偏好：{' / '.join(styles)}。"
+                f"3 个方向必须分别围绕这些风格变化，每个方向 visual_keyword 要呼应至少一个用户风格。"
+            )
     elif stage in ("storyboard", "plot_storyboard", "narration_storyboard"):
         parts.append(f"原始创意/内容：{ctx.get('text', '')}")
         if ctx.get("selected_direction"):
             parts.append(f"选定创意方向：{json.dumps(ctx['selected_direction'], ensure_ascii=False)}")
         if req.images:
             parts.append(f"参考图数量：{len(req.images)}张")
+        # User-configurable shot count + duration + style overrides
+        shot_count = int(req.settings.get("shotCount", 5) or 5)
+        shot_count = max(3, min(10, shot_count))
+        default_dur = int(req.settings.get("defaultDuration", 5) or 5)
+        default_dur = max(3, min(15, default_dur))
+        styles = req.settings.get("visualStyles") or []
+        parts.append(
+            f"⚙ 用户硬性参数（必须严格遵守）：\n"
+            f"- 必须生成 **{shot_count} 帧** 分镜（不多不少，shot 字段从 1 编号到 {shot_count}）\n"
+            f"- 每帧的 duration 字段统一设为 {default_dur}（用户已选默认时长）"
+        )
+        if styles:
+            parts.append(f"- 用户额外指定画面风格关键词：{' / '.join(styles)} —— 必须融入每帧 image_prompt 的画风锚定中")
 
     combined = f"{sys_instr}\n\n[用户输入]\n" + "\n".join(parts)
 
@@ -751,6 +770,124 @@ async def upload(file: UploadFile = File(...)):
     )
     url = r.json()["data"]["url"].replace("tmpfiles.org/", "tmpfiles.org/dl/")
     return {"url": url, "name": file.filename}
+
+
+def _ffmpeg_bin():
+    """Return path to bundled ffmpeg binary (works on Render without apt-get)."""
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"  # fallback to system ffmpeg
+
+
+async def _upload_to_tmpfiles(data: bytes, filename: str, content_type: str) -> str:
+    """Upload bytes to tmpfiles.org and return public download URL."""
+    r = await http().post(
+        "https://tmpfiles.org/api/v1/upload",
+        files={"file": (filename, data, content_type)},
+        timeout=120,
+    )
+    return r.json()["data"]["url"].replace("tmpfiles.org/", "tmpfiles.org/dl/")
+
+
+class LastFrameRequest(BaseModel):
+    video_url: str
+
+
+@app.post("/api/manga/last-frame")
+async def manga_last_frame(req: LastFrameRequest):
+    """Download a video and extract its last frame as a JPG, returning a public URL."""
+    import subprocess, tempfile, os as _os
+    try:
+        async with http().stream("GET", req.video_url, timeout=120) as resp:
+            if resp.status_code != 200:
+                raise HTTPException(400, f"Cannot fetch video: HTTP {resp.status_code}")
+            video_bytes = b""
+            async for chunk in resp.aiter_bytes():
+                video_bytes += chunk
+
+        with tempfile.TemporaryDirectory() as td:
+            vpath = _os.path.join(td, "in.mp4")
+            ipath = _os.path.join(td, "out.jpg")
+            with open(vpath, "wb") as f:
+                f.write(video_bytes)
+            # Extract the very last frame
+            cmd = [
+                _ffmpeg_bin(), "-y", "-sseof", "-0.5", "-i", vpath,
+                "-vsync", "0", "-q:v", "2", "-update", "1", ipath,
+            ]
+            proc = subprocess.run(cmd, capture_output=True, timeout=120)
+            if proc.returncode != 0 or not _os.path.exists(ipath):
+                raise HTTPException(500, f"ffmpeg failed: {proc.stderr.decode('utf-8', 'ignore')[:300]}")
+            with open(ipath, "rb") as f:
+                img_bytes = f.read()
+
+        img_url = await _upload_to_tmpfiles(img_bytes, "last_frame.jpg", "image/jpeg")
+        return {"url": img_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"last-frame error: {e}")
+
+
+class ConcatRequest(BaseModel):
+    video_urls: List[str]
+
+
+@app.post("/api/manga/concat")
+async def manga_concat(req: ConcatRequest):
+    """Download multiple video clips and concatenate them into a single MP4."""
+    import subprocess, tempfile, os as _os
+    if not req.video_urls or len(req.video_urls) < 2:
+        raise HTTPException(400, "Need at least 2 video URLs")
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            local_paths: List[str] = []
+            for i, url in enumerate(req.video_urls):
+                p = _os.path.join(td, f"clip_{i:03d}.mp4")
+                async with http().stream("GET", url, timeout=300) as resp:
+                    if resp.status_code != 200:
+                        raise HTTPException(400, f"Cannot fetch clip {i}: HTTP {resp.status_code}")
+                    with open(p, "wb") as f:
+                        async for chunk in resp.aiter_bytes():
+                            f.write(chunk)
+                local_paths.append(p)
+
+            # Re-encode each clip to a uniform format then concat (handles mixed codecs/sizes)
+            normalized: List[str] = []
+            for i, src in enumerate(local_paths):
+                dst = _os.path.join(td, f"norm_{i:03d}.ts")
+                cmd = [
+                    _ffmpeg_bin(), "-y", "-i", src,
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                    "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", dst,
+                ]
+                proc = subprocess.run(cmd, capture_output=True, timeout=300)
+                if proc.returncode != 0 or not _os.path.exists(dst):
+                    raise HTTPException(500, f"ffmpeg normalize {i} failed: {proc.stderr.decode('utf-8','ignore')[:200]}")
+                normalized.append(dst)
+
+            concat_input = "concat:" + "|".join(normalized)
+            out_path = _os.path.join(td, "final.mp4")
+            cmd2 = [
+                _ffmpeg_bin(), "-y", "-i", concat_input,
+                "-c", "copy", "-bsf:a", "aac_adtstoasc", out_path,
+            ]
+            proc2 = subprocess.run(cmd2, capture_output=True, timeout=300)
+            if proc2.returncode != 0 or not _os.path.exists(out_path):
+                raise HTTPException(500, f"ffmpeg concat failed: {proc2.stderr.decode('utf-8','ignore')[:200]}")
+            with open(out_path, "rb") as f:
+                final_bytes = f.read()
+
+        url = await _upload_to_tmpfiles(final_bytes, "manga_final.mp4", "video/mp4")
+        return {"url": url, "size": len(final_bytes), "clips": len(req.video_urls)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"concat error: {e}")
 
 
 @app.get("/api/balance")

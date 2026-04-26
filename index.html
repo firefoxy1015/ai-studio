@@ -1801,21 +1801,20 @@ createApp({
 
       // Snap duration to doubao-seedance valid values: 4/8/12
       const snapDuration = (d) => {
-        const n = Number(d) || 5
+        const n = Number(d) || mangaSettings.defaultDuration || 5
         if (n <= 6) return '4'
         if (n <= 10) return '8'
         return '12'
       }
+      const useChain    = !!mangaSettings.chainFrame
+      const autoConcat  = !!mangaSettings.autoConcat
 
-      // Phase A: KEYFRAME tasks — kling-image-o1 has best character consistency
-      // All keyframes use the SAME reference photos → identical character/style across shots
+      // Phase A: KEYFRAME tasks — kling-image-o1 for best character consistency
       const keyTasks = shots.map((shot, i) => reactive({
         label: `第${shot.shot || i+1}帧 · 🖼 关键帧 · ${shot.title || ''}`,
         prompt: shot.image_prompt || shot.video_prompt || '',
         model: 'kling-image-o1',
-        category: 'image',
-        phase: 'keyframe',
-        shotIdx: i,
+        category: 'image', phase: 'keyframe', shotIdx: i,
         params: {
           aspect_ratio: mangaSettings.ratio,
           resolution: '1k',
@@ -1826,50 +1825,125 @@ createApp({
         status: 'pending', progress: 0, progressText: '等待中', results: [], error: null
       }))
 
-      // Phase B: VIDEO tasks — uses keyframe as first frame → animation matches keyframe exactly
+      // Phase B: VIDEO tasks (params.images filled in later)
       const videoTasks = shots.map((shot, i) => reactive({
         label: `第${shot.shot || i+1}帧 · 🎬 视频 · ${shot.title || ''}`,
         prompt: shot.video_prompt || shot.image_prompt || '',
         model: 'doubao-seedance-1-5-pro-251215',
-        category: 'video',
-        phase: 'video',
-        shotIdx: i,
+        category: 'video', phase: 'video', shotIdx: i,
         params: {
           audio_duration: snapDuration(shot.duration),
           resolution: '1080p',
           ratio: mangaSettings.ratio,
           generate_audio: true,
-          // images filled in after keyframe completes
         },
         narration: shot.narration || shot.dialogue || '',
         scene: shot.scene || '',
-        status: 'pending', progress: 0, progressText: '等待关键帧...', results: [], error: null
+        status: 'pending', progress: 0, progressText: useChain ? '等待前一段...' : '等待关键帧...', results: [], error: null
       }))
 
-      // Interleave: keyframe + video for each shot → user sees them paired
+      // Interleave keyframe + video so the UI shows them paired per shot
       const allTasks = []
-      for (let i = 0; i < shots.length; i++) {
-        allTasks.push(keyTasks[i], videoTasks[i])
-      }
+      for (let i = 0; i < shots.length; i++) allTasks.push(keyTasks[i], videoTasks[i])
       prodStage.tasks  = allTasks
       agentTasks.value = allTasks
       agentPhase.value = 2
 
-      // Phase A: generate all keyframes in parallel
-      await Promise.all(keyTasks.map(execSingleAgentTask))
-
-      // Phase B: each video uses its keyframe as the first frame
-      await Promise.all(videoTasks.map(async (vTask, i) => {
-        const kf = keyTasks[i]
-        if (kf.status === 'done' && kf.results?.length) {
-          vTask.params.images = [kf.results[0]]
+      if (useChain) {
+        // ─── 链式顺序模式：一帧一帧来，每段视频的首帧 = 上一段视频的尾帧 ───
+        // 第一帧：先生成关键帧 → 用关键帧作首帧生成视频
+        for (let i = 0; i < shots.length; i++) {
+          const kf = keyTasks[i]
+          const vTask = videoTasks[i]
+          if (i === 0) {
+            // 第 0 段：用 kling 生成首张关键帧
+            await execSingleAgentTask(kf)
+            if (kf.status !== 'done' || !kf.results?.length) {
+              vTask.status = 'error'; vTask.error = '关键帧失败'; continue
+            }
+            vTask.params.images = [kf.results[0]]
+          } else {
+            // 后续段：尝试从上一段视频提取尾帧
+            const prevV = videoTasks[i-1]
+            if (prevV.status === 'done' && prevV.results?.length) {
+              kf.progressText = '提取上一段尾帧...'
+              kf.status = 'loading'
+              try {
+                const r = await fetch('/api/manga/last-frame', {
+                  method: 'POST', headers: {'Content-Type':'application/json'},
+                  body: JSON.stringify({ video_url: prevV.results[0] })
+                })
+                const j = await r.json()
+                if (j.url) {
+                  kf.results = [j.url]
+                  kf.status  = 'done'
+                  kf.progress = 100
+                  kf.progressText = '尾帧已提取'
+                  kf.label = `第${i+1}帧 · 🔗 链接帧 · ${shots[i].title || ''}`
+                  vTask.params.images = [j.url]
+                } else { throw new Error(j.detail || '尾帧提取失败') }
+              } catch(e) {
+                // Fallback: 用 kling 重新生成关键帧
+                kf.status = 'pending'; kf.progressText = '尾帧失败,改用关键帧'
+                await execSingleAgentTask(kf)
+                if (kf.status !== 'done' || !kf.results?.length) {
+                  vTask.status = 'error'; vTask.error = '关键帧/尾帧均失败'; continue
+                }
+                vTask.params.images = [kf.results[0]]
+              }
+            } else {
+              // 上一段没成功 → 退回独立生成关键帧
+              await execSingleAgentTask(kf)
+              if (kf.status !== 'done' || !kf.results?.length) {
+                vTask.status = 'error'; vTask.error = '关键帧失败'; continue
+              }
+              vTask.params.images = [kf.results[0]]
+            }
+          }
           await execSingleAgentTask(vTask)
-        } else {
-          vTask.status = 'error'
-          vTask.error = '关键帧失败，跳过视频'
-          vTask.progressText = ''
         }
-      }))
+      } else {
+        // ─── 并行模式：所有关键帧并行 → 所有视频并行（用各自关键帧） ───
+        await Promise.all(keyTasks.map(execSingleAgentTask))
+        await Promise.all(videoTasks.map(async (vTask, i) => {
+          const kf = keyTasks[i]
+          if (kf.status === 'done' && kf.results?.length) {
+            vTask.params.images = [kf.results[0]]
+            await execSingleAgentTask(vTask)
+          } else {
+            vTask.status = 'error'; vTask.error = '关键帧失败，跳过视频'; vTask.progressText = ''
+          }
+        }))
+      }
+
+      // Phase C: 自动剪辑成片
+      if (autoConcat) {
+        const goodClips = videoTasks.filter(v => v.status === 'done' && v.results?.length).map(v => v.results[0])
+        if (goodClips.length >= 2) {
+          const concatTask = reactive({
+            label: `🎞️ 最终成片 · ${goodClips.length} 段拼接`,
+            category: 'video', phase: 'concat',
+            status: 'loading', progress: 30, progressText: '下载片段并合成...',
+            results: [], error: null,
+          })
+          allTasks.push(concatTask)
+          prodStage.tasks  = allTasks
+          agentTasks.value = allTasks
+          try {
+            const r = await fetch('/api/manga/concat', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ video_urls: goodClips })
+            })
+            const j = await r.json()
+            if (j.url) {
+              concatTask.results = [j.url]; concatTask.status = 'done'; concatTask.progress = 100
+              concatTask.progressText = '成片完成'
+            } else throw new Error(j.detail || '合成失败')
+          } catch(e) {
+            concatTask.status = 'error'; concatTask.error = String(e?.message || e)
+          }
+        }
+      }
 
       prodStage.status = 'done'
       agentPhase.value = 3
