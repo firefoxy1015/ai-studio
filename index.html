@@ -674,7 +674,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
                           <div class="s2-shot-num">{{shot.shot}}</div>
                           <div class="s2-shot-title">{{shot.title}}</div>
                           <span class="s2-shot-camera">{{shot.camera}}</span>
-                          <span class="s2-shot-dur">{{shot.duration}}s</span>
+                          <span class="s2-shot-dur">
+                            <button class="manga-spin-btn" style="padding:0 6px"
+                                    :disabled="stage.status==='done'"
+                                    @click="shot.duration=Math.max(3,(Number(shot.duration)||5)-1)">−</button>
+                            {{shot.duration}}s
+                            <button class="manga-spin-btn" style="padding:0 6px"
+                                    :disabled="stage.status==='done'"
+                                    @click="shot.duration=Math.min(15,(Number(shot.duration)||5)+1)">+</button>
+                          </span>
                         </div>
                         <div class="s2-shot-scene">{{shot.scene}}</div>
                         <div v-if="shot.dialogue" class="s2-shot-dialogue">"{{shot.dialogue}}"</div>
@@ -945,6 +953,44 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             <button class="manga-spin-btn" @click="mangaSettings.qualityScore=Math.max(50,mangaSettings.qualityScore-5)">−</button>
             <span class="manga-spin-val">{{mangaSettings.qualityScore}}</span>
             <button class="manga-spin-btn" @click="mangaSettings.qualityScore=Math.min(100,mangaSettings.qualityScore+5)">+</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">分镜数量</span>
+          <div class="manga-spinner-row">
+            <button class="manga-spin-btn" @click="mangaSettings.shotCount=Math.max(3,mangaSettings.shotCount-1)">−</button>
+            <span class="manga-spin-val">{{mangaSettings.shotCount}} 帧</span>
+            <button class="manga-spin-btn" @click="mangaSettings.shotCount=Math.min(10,mangaSettings.shotCount+1)">+</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">默认每帧时长</span>
+          <div class="manga-gen-modes">
+            <button v-for="d in [4,5,6,8,10,12]" :key="d"
+                    :class="['manga-gen-btn',{active:mangaSettings.defaultDuration===d}]"
+                    @click="mangaSettings.defaultDuration=d">{{d}}s</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">画面风格 <small style="color:var(--muted)">(可多选)</small></span>
+          <div class="manga-gen-modes" style="flex-wrap:wrap">
+            <button v-for="s in mangaStylePresets" :key="s"
+                    :class="['manga-gen-btn',{active:mangaSettings.visualStyles.includes(s)}]"
+                    @click="toggleMangaStyle(s)">{{s}}</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">首尾帧链接 <small style="color:var(--muted)">(更连贯)</small></span>
+          <div class="manga-gen-modes">
+            <button :class="['manga-gen-btn',{active:!mangaSettings.chainFrame}]" @click="mangaSettings.chainFrame=false">关</button>
+            <button :class="['manga-gen-btn',{active:mangaSettings.chainFrame}]" @click="mangaSettings.chainFrame=true">开 (顺序生产)</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">自动剪辑成片</span>
+          <div class="manga-gen-modes">
+            <button :class="['manga-gen-btn',{active:!mangaSettings.autoConcat}]" @click="mangaSettings.autoConcat=false">关</button>
+            <button :class="['manga-gen-btn',{active:mangaSettings.autoConcat}]" @click="mangaSettings.autoConcat=true">开</button>
           </div>
         </div>
       </div>
@@ -1450,8 +1496,27 @@ createApp({
     const mangaContext     = ref({})
     const mangaFeedback    = ref('')
     const mangaSettingsOpen = ref(false)
-    const mangaSettings    = reactive({ genMode: 'precise', maxRetries: 2, qualityScore: 80, ratio: '9:16' })
+    const mangaSettings    = reactive({
+      genMode: 'precise', maxRetries: 2, qualityScore: 80, ratio: '9:16',
+      shotCount: 5,             // 分镜数量 (3-10)
+      defaultDuration: 5,       // 默认每帧时长 (4/5/6/8/10/12)
+      visualStyles: [],         // 用户额外指定的画面风格关键词
+      chainFrame: false,        // 首尾帧链接：上一段尾帧 → 下一段首帧
+      autoConcat: true,         // 自动剪辑成最终成片
+    })
     const isMangaAgent     = computed(() => ['manga_s2','manga_plot','manga_narration'].includes(agentSelected.value?.id))
+
+    const mangaStylePresets = [
+      '电影感写实','日式动漫','3D皮克斯','水彩插画','赛博朋克霓虹',
+      '复古胶片','吉卜力风','暗黑哥特','水墨国风','油画质感',
+      '极简扁平','韩漫风','像素艺术','超现实梦境','黑白线稿'
+    ]
+
+    function toggleMangaStyle(s) {
+      const i = mangaSettings.visualStyles.indexOf(s)
+      if (i >= 0) mangaSettings.visualStyles.splice(i, 1)
+      else mangaSettings.visualStyles.push(s)
+    }
 
     function selectAgent(a) {
       agentSelected.value  = a

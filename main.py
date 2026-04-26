@@ -409,6 +409,7 @@ class MangaStageRequest(BaseModel):
     context: Dict[str, Any] = {}
     images: List[str] = []
     feedback: str = ""
+    settings: Dict[str, Any] = {}
 
 
 MANGA_STAGE_PROMPTS: Dict[str, str] = {
