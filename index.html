@@ -2016,10 +2016,26 @@ createApp({
       task.progress = 30
       task.progressText = '下载片段并合成...'
       task.error = null
+
+      // Recover sourceClips if missing (e.g. task restored from localStorage before sourceClips field existed)
+      let clips = task.sourceClips
+      if (!clips || !clips.length) {
+        clips = (agentTasks.value || [])
+          .filter(t => t.phase === 'video' && t.status === 'done' && t.results?.length)
+          .map(t => t.results[0])
+        task.sourceClips = clips
+      }
+      if (!clips || clips.length < 2) {
+        task.status = 'error'
+        task.error = `成片需要至少 2 段成功的视频片段，当前只有 ${clips?.length || 0} 段`
+        return
+      }
+      task.label = `🎞️ 最终成片 · ${clips.length} 段拼接`
+
       try {
         const r = await fetch('/api/manga/concat', {
           method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ video_urls: task.sourceClips || [] })
+          body: JSON.stringify({ video_urls: clips })
         })
         const txt = await r.text()
         let j = null
