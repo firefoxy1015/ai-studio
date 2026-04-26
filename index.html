@@ -58,6 +58,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 /* History feed */
 .history{flex:1;overflow-y:auto;padding:20px}
+.history.no-pad{padding:0}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:12px}
 .empty-icon{font-size:48px;opacity:.4}
 .empty-text{font-size:14px}
@@ -109,6 +110,45 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .role-popover::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#1e1e2e}
 .role-popover-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
 .role-popover-desc{font-size:11px;color:var(--muted);line-height:1.5}
+
+/* ── Director Modal ──────────────────────────────────── */
+.role-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px}
+.role-modal-box{background:#1a1a2e;border:1px solid var(--border);border-radius:16px;width:min(520px,100%);max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.role-modal-header{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.role-modal-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)}
+.role-modal-title-text{flex:1;font-size:15px;font-weight:600;color:var(--text)}
+.role-modal-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1}
+.role-modal-close:hover{background:var(--card);color:var(--text)}
+.role-modal-progress{padding:18px 18px 4px}
+.role-progress-bar{display:flex;align-items:center}
+.role-progress-step{display:flex;align-items:center;flex:1}
+.role-progress-step:last-child{flex:0}
+.role-progress-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;transition:.3s}
+.role-progress-dot.active{border-color:var(--accent);background:rgba(108,92,231,.2);color:var(--accent)}
+.role-progress-dot.done{border-color:#4ade80;background:#4ade80;color:#0a0a0a}
+.role-progress-line{flex:1;height:2px;background:var(--border);transition:.3s}
+.role-progress-line.done{background:#4ade80}
+.role-progress-labels{display:flex;justify-content:space-between;padding:4px 0 0;font-size:11px;color:var(--muted)}
+.role-modal-status{display:flex;align-items:center;gap:8px;padding:10px 18px;font-size:13px;color:var(--muted)}
+.role-modal-status.done{color:#4ade80;font-weight:600}
+.role-modal-spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.role-result-block{margin:0 16px 12px;border-radius:10px;padding:12px 14px}
+.role-result-block.explanation{background:rgba(108,92,231,.1);border:1px solid rgba(108,92,231,.25)}
+.role-result-block.cn-prompt{background:rgba(255,165,0,.07);border:1px solid rgba(255,165,0,.2)}
+.role-result-block.en-prompt{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2)}
+.role-result-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px}
+.role-result-icon{font-size:14px}
+.role-result-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+.role-result-badge.cn{background:rgba(255,165,0,.25);color:#fb923c}
+.role-result-badge.en{background:rgba(52,211,153,.25);color:#34d399}
+.role-result-text{font-size:13px;color:var(--text);line-height:1.65}
+.role-modal-actions{display:flex;gap:8px;padding:12px 16px 16px;border-top:1px solid var(--border);margin-top:4px}
+.role-btn-regen{flex:0 0 auto;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;transition:.15s}
+.role-btn-regen:hover{border-color:var(--accent);color:var(--text)}
+.role-btn-cn{flex:1;padding:8px 14px;border-radius:8px;border:none;background:#d97706;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+.role-btn-cn:hover{background:#b45309}
+.role-btn-en{flex:1;padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+.role-btn-en:hover{background:#5a4fcf}
 
 /* ── Bottom Input ────────────────────────────────────── */
 .input-area{border-top:1px solid var(--border);padding:14px 20px;flex-shrink:0}
@@ -195,7 +235,164 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .works-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:12px}
 .works-topbar{display:flex;align-items:center;gap:8px}
 .works-clear-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+/* ── Agents Sidebar (data999 style) ── */
+.agent-list{padding:6px 8px}
+.agent-card{display:flex;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px;transition:.15s;align-items:flex-start}
+.agent-card:hover{background:var(--hover)}
+.agent-card.active{background:rgba(108,92,231,.15)}
+.agent-icon-sq{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.agent-card-body{flex:1;min-width:0}
+.agent-card-top{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.agent-card-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;flex-shrink:0}
+.agent-card-desc{font-size:11px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* ── Agent Hero (Phase 0) ──────────────────────────────── */
+.agent-hero{display:flex;flex-direction:column;height:100%;overflow-y:auto}
+.agent-hero-banner{position:relative;padding:44px 48px 40px;display:flex;align-items:center;gap:28px;overflow:hidden;flex-shrink:0}
+.agent-hero-banner::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,rgba(12,12,20,.0) 0%,rgba(12,12,20,.45) 100%);z-index:0}
+.agent-hero-glow{position:absolute;width:320px;height:320px;border-radius:50%;opacity:.25;filter:blur(80px);top:-80px;right:60px;z-index:0;pointer-events:none}
+.agent-hero-icon-wrap{width:80px;height:80px;border-radius:20px;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:38px;flex-shrink:0;position:relative;z-index:1;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.agent-hero-info{position:relative;z-index:1;flex:1;min-width:0}
+.agent-hero-title{font-size:28px;font-weight:800;color:#fff;display:flex;align-items:center;gap:10px;margin-bottom:8px;line-height:1.2;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.agent-hero-badge{font-size:11px;padding:3px 9px;border-radius:6px;font-weight:700;vertical-align:middle}
+.agent-hero-desc{font-size:14px;color:rgba(255,255,255,.75);line-height:1.65;max-width:560px}
+.agent-hero-features{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);flex-shrink:0}
+.agent-hero-feat{background:var(--card);padding:24px 28px;transition:.15s}
+.agent-hero-feat:hover{background:var(--hover)}
+.agent-hero-feat-num{font-size:32px;font-weight:900;font-family:monospace;line-height:1;margin-bottom:10px;opacity:.9}
+.agent-hero-feat-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px}
+.agent-hero-feat-desc{font-size:12px;color:var(--muted);line-height:1.6}
+.agent-hero-hint{flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);gap:6px;padding:20px}
+.agent-hero-hint kbd{background:var(--card);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:11px;font-family:monospace;color:var(--text)}
+/* Agent Messages */
+.agent-msgs{padding:20px;max-width:720px;margin:0 auto}
+.agent-msg{margin-bottom:16px}
+.agent-msg-user{display:flex;justify-content:flex-end}
+.agent-msg-user-bubble{background:linear-gradient(135deg,var(--accent),#4834d4);color:#fff;padding:10px 14px;border-radius:12px;border-bottom-right-radius:3px;max-width:76%;font-size:13px;line-height:1.6}
+.agent-msg-user-imgs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
+.agent-msg-user-imgs img{width:52px;height:52px;border-radius:6px;object-fit:cover}
+.agent-msg-ai{display:flex;gap:10px}
+.agent-msg-ai-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4834d4);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px}
+.agent-msg-ai-content{flex:1;min-width:0}
+.agent-msg-ai-label{font-size:11px;color:var(--muted);margin-bottom:5px}
+.agent-planning-bubble{background:var(--card);border:1px solid var(--border);border-radius:12px;border-top-left-radius:3px;padding:12px 14px;font-size:11px;font-family:monospace;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow-y:auto}
+.agent-task-cards{display:flex;flex-direction:column;gap:10px}
+.agent-task-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;transition:.15s}
+.agent-task-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.agent-task-label{font-size:13px;font-weight:600;color:var(--text);flex:1}
+.agent-task-status{font-size:11px;padding:2px 8px;border-radius:99px}
+.agent-task-prompt{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px}
+.agent-task-narration{font-size:12px;color:#f59e0b;padding:6px 10px;background:rgba(245,158,11,.1);border-radius:6px;margin-bottom:8px}
+.agent-task-result img,.agent-task-result video{max-width:100%;border-radius:8px;margin-top:6px;display:block}
+.agent-status-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.agent-status-text{font-size:14px;font-weight:600;color:var(--text);flex:1}
+/* Agent Bottom Input Bar */
+.agent-input-bar{border-top:1px solid var(--border);padding:12px 16px 14px;background:var(--bg);flex-shrink:0}
+.agent-upload-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.agent-upload-card{width:64px;height:64px;border-radius:10px;flex-shrink:0;position:relative;cursor:pointer;overflow:hidden}
+.agent-upload-card.empty{background:var(--card);border:1px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:.15s}
+.agent-upload-card.empty:hover{border-color:var(--accent)}
+.agent-upload-plus{font-size:20px;color:var(--muted);line-height:1}
+.agent-upload-lbl{font-size:10px;color:var(--muted);margin-top:3px;text-align:center;line-height:1.2}
+.agent-upload-card.has-img img{width:100%;height:100%;object-fit:cover}
+.agent-upload-del{position:absolute;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;font-size:20px;color:#fff}
+.agent-upload-card.has-img:hover .agent-upload-del{display:flex}
+.agent-input-row{display:flex;gap:10px;align-items:flex-end}
+.agent-textarea-wrap{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;transition:.15s}
+.agent-textarea-wrap:focus-within{border-color:var(--accent)}
+.agent-prompt-input{width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:14px;resize:none;line-height:1.5;font-family:inherit;min-height:44px;max-height:120px}
+.agent-prompt-input::placeholder{color:var(--muted)}
+.agent-input-right{display:flex;flex-direction:column;align-items:center;gap:6px}
+.agent-send-btn{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;transition:.15s;flex-shrink:0}
+.agent-send-btn:hover:not(:disabled){transform:scale(1.05);filter:brightness(1.1)}
+.agent-send-btn:disabled{opacity:.4;cursor:not-allowed}
+.agent-mode-toggle{display:flex;gap:4px}
+.agent-mode-btn{font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;white-space:nowrap}
+.agent-mode-btn.active{background:linear-gradient(135deg,var(--accent),#4834d4);border-color:var(--accent);color:#fff}
 .works-clear-btn:hover{border-color:var(--error);color:var(--error)}
+/* ── Manga S2.0 Pipeline ── */
+.s2-pipeline{padding:20px;max-width:760px;margin:0 auto;padding-bottom:40px}
+.s2-stages{display:flex;flex-direction:column}
+.s2-stage{display:flex;gap:14px}
+.s2-stage-timeline{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:32px}
+.s2-stage-dot{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;z-index:1;transition:.3s}
+.s2-stage-dot.dot-done{border-color:#4ade80;background:#4ade80;color:#0a0a0a}
+.s2-stage-dot.dot-running{border-color:var(--accent);background:rgba(108,92,231,.15);color:var(--accent)}
+.s2-stage-dot.dot-awaiting{border-color:#f59e0b;background:rgba(245,158,11,.12);color:#f59e0b}
+.s2-stage-line{flex:1;width:2px;background:var(--border);min-height:16px;transition:.3s;margin:4px 0}
+.s2-stage-line.done{background:#4ade80}
+.s2-stage-card{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;transition:.2s}
+.s2-stage-card.card-running{border-color:rgba(108,92,231,.4)}
+.s2-stage-card.card-awaiting{border-color:rgba(245,158,11,.35)}
+.s2-stage-card.card-done{opacity:.72}
+.s2-stage-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.s2-stage-icon{font-size:16px}
+.s2-stage-label{font-size:14px;font-weight:600;color:var(--text);flex:1}
+.s2-stage-badge{font-size:10px;padding:2px 7px;border-radius:99px;font-weight:600}
+.badge-pending{background:rgba(255,255,255,.06);color:var(--muted)}
+.badge-running{background:rgba(108,92,231,.2);color:#a29bfe}
+.badge-awaiting{background:rgba(245,158,11,.2);color:#f59e0b}
+.badge-done{background:rgba(74,222,128,.15);color:#4ade80}
+.badge-error{background:rgba(225,112,85,.2);color:var(--error)}
+.s2-spinner{width:12px;height:12px;border:2px solid rgba(108,92,231,.3);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.s2-streaming{font-size:12px;font-family:monospace;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow-y:auto;line-height:1.5}
+.s2-error-row{font-size:12px;color:var(--error);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.s2-intent-result{display:flex;flex-direction:column;gap:6px}
+.s2-result-row{display:flex;gap:8px;align-items:flex-start}
+.s2-result-label{font-size:11px;color:var(--muted);flex-shrink:0;min-width:36px}
+.s2-result-val{font-size:12px;color:var(--text)}
+.s2-result-summary{font-size:13px;color:var(--text);line-height:1.65;margin-top:8px;padding:10px 12px;background:rgba(108,92,231,.08);border-radius:8px;border-left:3px solid var(--accent)}
+.s2-directions{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.s2-dir-card{flex:1;min-width:155px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:.15s;position:relative}
+.s2-dir-card:hover{border-color:var(--accent)}
+.s2-dir-card.selected{border-color:#4ade80;background:rgba(74,222,128,.05)}
+.s2-dir-card.faded{opacity:.35;pointer-events:none}
+.s2-dir-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.s2-dir-num{font-size:10px;color:var(--muted);font-weight:600}
+.s2-dir-tag{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(108,92,231,.2);color:#a29bfe;font-weight:600}
+.s2-dir-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px}
+.s2-dir-keyword{font-size:11px;color:var(--accent2);margin-bottom:6px}
+.s2-dir-synopsis{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px}
+.s2-dir-highlight{font-size:11px;color:#f59e0b}
+.s2-dir-check{position:absolute;top:8px;right:8px;font-size:10px;background:#4ade80;color:#0a0a0a;padding:1px 6px;border-radius:4px;font-weight:700}
+.s2-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:4px}
+.s2-shot-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px}
+.s2-shot-header{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.s2-shot-num{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4834d4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.s2-shot-title{font-size:12px;font-weight:600;color:var(--text);flex:1}
+.s2-shot-camera{font-size:10px;color:var(--muted);padding:1px 5px;background:rgba(255,255,255,.06);border-radius:4px}
+.s2-shot-dur{font-size:10px;color:var(--muted)}
+.s2-shot-scene{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:4px}
+.s2-shot-dialogue{font-size:11px;color:#f59e0b;font-style:italic;margin-bottom:4px}
+.s2-shot-narr{font-size:11px;color:#34d399;margin-bottom:4px}
+.s2-shot-prompt{font-size:10px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.s2-actions{margin-top:10px;border-top:1px solid var(--border);padding-top:10px}
+.s2-feedback-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;outline:none;margin-bottom:8px;font-family:inherit}
+.s2-feedback-input:focus{border-color:var(--accent)}
+.s2-action-btns{display:flex;gap:8px}
+.s2-regen-btn{padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:.15s}
+.s2-regen-btn:hover:not(:disabled){border-color:var(--accent);color:var(--text)}
+.s2-regen-btn:disabled{opacity:.4;cursor:not-allowed}
+.s2-confirm-btn{flex:1;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),#4834d4);color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:.15s}
+.s2-confirm-btn:hover{filter:brightness(1.1)}
+.s2-prod-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--text)}
+/* Manga global settings */
+.manga-settings-panel{border-bottom:1px solid var(--border);padding:10px 16px;background:rgba(108,92,231,.04);display:flex;flex-direction:column;gap:8px}
+.manga-settings-title{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:2px}
+.manga-settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.manga-settings-label{font-size:12px;color:var(--muted);flex-shrink:0}
+.manga-gen-modes{display:flex;gap:4px;flex-wrap:wrap}
+.manga-gen-btn{padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+.manga-gen-btn.active{border-color:var(--accent);background:rgba(108,92,231,.15);color:#a29bfe}
+.manga-spinner-row{display:flex;align-items:center;gap:6px}
+.manga-spin-btn{width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:.15s}
+.manga-spin-btn:hover{border-color:var(--accent);color:var(--accent)}
+.manga-spin-val{font-size:13px;color:var(--text);min-width:26px;text-align:center;font-weight:600}
+/* Shot dual prompts */
+.s2-shot-img-prompt{font-size:10px;color:var(--muted);line-height:1.4;margin-top:5px;padding:4px 6px;background:rgba(108,92,231,.06);border-radius:4px;border-left:2px solid var(--accent)}
+.s2-shot-vid-prompt{font-size:10px;color:#00cec9;line-height:1.4;padding:4px 6px;background:rgba(0,206,201,.04);border-radius:4px;border-left:2px solid var(--accent2);margin-top:3px}
+.s2-shot-prompt-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -222,8 +419,27 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <textarea class="system-input" v-model="chatSystem" placeholder="可选：设置AI角色..."></textarea>
     </div>
 
+    <!-- Agents sidebar (data999 style) -->
+    <template v-if="activeCategory==='agents'">
+      <div class="agent-list">
+        <div class="section-label" style="padding:10px 2px 8px">选择智能体</div>
+        <div v-for="a in AGENTS" :key="a.id"
+             :class="['agent-card', {active: agentSelected?.id===a.id}]"
+             @click="selectAgent(a)">
+          <div class="agent-icon-sq" :style="{background:a.bg}">{{a.icon}}</div>
+          <div class="agent-card-body">
+            <div class="agent-card-top">
+              <div class="agent-card-name">{{a.name}}</div>
+              <span class="agent-badge" :style="a.badgeStyle">{{a.badge}}</span>
+            </div>
+            <div class="agent-card-desc">{{a.desc}}</div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Works sidebar -->
-    <template v-if="activeCategory==='works'">
+    <template v-else-if="activeCategory==='works'">
       <div class="works-sidebar">
         <div class="section-label" style="padding:10px 2px 8px">筛选</div>
         <div class="works-filter">
@@ -270,6 +486,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             <span style="font-size:12px;color:var(--muted);font-weight:400">共 {{ worksCount('all') }} 件</span>
           </div>
         </template>
+        <template v-else-if="activeCategory==='agents'">
+          <span v-if="agentSelected">{{agentSelected.icon}} {{agentSelected.name}}</span>
+          <span v-else style="color:var(--muted)">🤖 智能体</span>
+        </template>
         <template v-else>
           <span v-if="selectedModel">{{ selectedModel.icon }} {{ selectedModel.name }}</span>
           <span v-else style="color:var(--muted)">请选择模型</span>
@@ -279,11 +499,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div class="topbar-hint" v-else-if="activeCategory==='works'">
         <button class="works-clear-btn" @click="clearWorks">🗑 清空记录</button>
       </div>
+      <div class="topbar-hint" v-else-if="activeCategory==='agents'">
+        {{ agentSelected ? (agentPhase===0 ? 'Ctrl+Enter 发送' : agentPhase===1 ? 'AI 规划中...' : agentPhase>=2 ? '生成任务执行中' : '') : '选择左侧智能体' }}
+      </div>
       <div class="topbar-hint" v-else>图片/视频生成需要数分钟，请耐心等待</div>
     </div>
 
     <!-- History / Chat -->
-    <div class="history" ref="historyEl">
+    <div :class="['history', {'no-pad': activeCategory==='agents'}]" ref="historyEl">
       <!-- CHAT mode -->
       <template v-if="activeCategory==='chat'">
         <div v-if="chatMessages.length===0" class="empty-state">
@@ -337,6 +560,281 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             </div>
           </div>
         </div>
+      </template>
+
+      <!-- AGENTS mode -->
+      <template v-else-if="activeCategory==='agents'">
+
+        <!-- No agent selected -->
+        <div v-if="!agentSelected" class="empty-state">
+          <div class="empty-icon">🤖</div>
+          <div class="empty-text">从左侧选择一个智能体开始创作</div>
+        </div>
+
+        <!-- Phase 0: Hero intro -->
+        <template v-else-if="agentPhase===0">
+          <div class="agent-hero">
+            <!-- top gradient banner -->
+            <div class="agent-hero-banner" :style="{background: agentSelected.bg}">
+              <div class="agent-hero-glow" :style="{background: agentSelected.accentColor}"></div>
+              <div class="agent-hero-icon-wrap">
+                <div class="agent-hero-icon">{{agentSelected.icon}}</div>
+              </div>
+              <div class="agent-hero-info">
+                <div class="agent-hero-title">
+                  {{agentSelected.name}}
+                  <span class="agent-hero-badge" :style="agentSelected.badgeStyle">{{agentSelected.badge}}</span>
+                </div>
+                <div class="agent-hero-desc">{{agentSelected.desc}}</div>
+              </div>
+            </div>
+            <!-- feature grid -->
+            <div class="agent-hero-features">
+              <div v-for="f in agentSelected.features" :key="f.num" class="agent-hero-feat">
+                <div class="agent-hero-feat-num" :style="{color: agentSelected.accentColor}">{{f.num}}</div>
+                <div class="agent-hero-feat-title">{{f.title}}</div>
+                <div class="agent-hero-feat-desc">{{f.desc}}</div>
+              </div>
+            </div>
+            <!-- start hint -->
+            <div class="agent-hero-hint">
+              <span v-if="agentSelected.needsImages">📎 在下方上传参考图，</span>输入描述后按 <kbd>Ctrl+Enter</kbd> 开始生成
+            </div>
+          </div>
+        </template>
+
+        <!-- Manga S2.0 Pipeline (phases 1+) -->
+        <template v-else-if="isMangaAgent">
+          <div class="s2-pipeline">
+            <!-- User input bubble -->
+            <div class="agent-msgs" style="padding-bottom:0">
+              <div class="agent-msg">
+                <div class="agent-msg-user">
+                  <div class="agent-msg-user-bubble">
+                    <div v-if="agentLastInput?.images?.length" class="agent-msg-user-imgs">
+                      <img v-for="url in agentLastInput.images" :key="url" :src="url"/>
+                    </div>
+                    <span>{{agentLastInput?.text}}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Stage timeline -->
+            <div class="s2-stages">
+              <div v-for="(stage, si) in mangaStages" :key="stage.id" class="s2-stage">
+                <div class="s2-stage-timeline">
+                  <div class="s2-stage-dot" :class="'dot-'+stage.status">
+                    <span v-if="stage.status==='done'">✓</span>
+                    <span v-else-if="stage.status==='running'"><i class="s2-spinner"></i></span>
+                    <span v-else>{{si+1}}</span>
+                  </div>
+                  <div class="s2-stage-line" v-if="si < mangaStages.length-1" :class="{done: stage.status==='done'}"></div>
+                </div>
+                <div class="s2-stage-card" :class="'card-'+stage.status">
+                  <div class="s2-stage-header">
+                    <span class="s2-stage-icon">{{stage.icon}}</span>
+                    <span class="s2-stage-label">{{stage.label}}</span>
+                    <span class="s2-stage-badge" :class="'badge-'+stage.status">
+                      {{stage.status==='done'?'完成':stage.status==='running'?'生成中':stage.status==='awaiting'?'待确认':stage.status==='error'?'失败':'等待'}}
+                    </span>
+                  </div>
+                  <!-- Streaming output -->
+                  <div v-if="stage.status==='running'" class="s2-streaming">{{stage.streaming||'...'}}<span class="cursor-blink"></span></div>
+                  <!-- Error -->
+                  <div v-if="stage.status==='error'" class="s2-error-row">❌ {{stage.error}} <button class="btn-sm" @click="runMangaStage(si)">重试</button></div>
+                  <!-- Intent result -->
+                  <template v-if="(stage.status==='awaiting'||stage.status==='done') && stage.id==='intent' && stage.result">
+                    <div class="s2-intent-result">
+                      <div class="s2-result-row"><span class="s2-result-label">类型</span><span class="s2-result-val">{{stage.result.intent_type==='narrative'?'从零创作':'改编素材'}}</span></div>
+                      <div class="s2-result-row"><span class="s2-result-label">主题</span><span class="s2-result-val">{{stage.result.core_themes?.join(' · ')}}</span></div>
+                      <div class="s2-result-row"><span class="s2-result-label">风格</span><span class="s2-result-val">{{stage.result.visual_style}}</span></div>
+                      <div class="s2-result-summary">{{stage.result.summary}}</div>
+                    </div>
+                  </template>
+                  <!-- Directions: 3 selectable cards -->
+                  <template v-if="(stage.status==='awaiting'||stage.status==='done') && stage.id==='directions' && stage.result">
+                    <div class="s2-directions">
+                      <div v-for="(dir,di) in stage.result" :key="dir.id"
+                           :class="['s2-dir-card', {selected:stage.selectedIdx===di, faded:stage.status==='done'&&stage.selectedIdx!==di}]"
+                           @click="selectMangaDirection(si,di)">
+                        <div class="s2-dir-top"><span class="s2-dir-num">方向 {{dir.id}}</span><span class="s2-dir-tag">{{dir.style_tag}}</span></div>
+                        <div class="s2-dir-title">{{dir.title}}</div>
+                        <div class="s2-dir-keyword">🎨 {{dir.visual_keyword}}</div>
+                        <div class="s2-dir-synopsis">{{dir.synopsis}}</div>
+                        <div class="s2-dir-highlight">⚡ {{dir.highlight}}</div>
+                        <div v-if="stage.selectedIdx===di" class="s2-dir-check">✓ 已选择</div>
+                      </div>
+                    </div>
+                  </template>
+                  <!-- Storyboard shots -->
+                  <template v-if="(stage.status==='awaiting'||stage.status==='done') && ['storyboard','plot_storyboard','narration_storyboard'].includes(stage.id) && stage.result">
+                    <div class="s2-shots">
+                      <div v-for="shot in stage.result" :key="shot.shot" class="s2-shot-card">
+                        <div class="s2-shot-header">
+                          <div class="s2-shot-num">{{shot.shot}}</div>
+                          <div class="s2-shot-title">{{shot.title}}</div>
+                          <span class="s2-shot-camera">{{shot.camera}}</span>
+                          <span class="s2-shot-dur">{{shot.duration}}s</span>
+                        </div>
+                        <div class="s2-shot-scene">{{shot.scene}}</div>
+                        <div v-if="shot.dialogue" class="s2-shot-dialogue">"{{shot.dialogue}}"</div>
+                        <div v-if="shot.narration" class="s2-shot-narr">🎙️ {{shot.narration}}</div>
+                        <div v-if="shot.image_prompt" class="s2-shot-img-prompt">
+                          <div class="s2-shot-prompt-lbl">图片提示词</div>{{shot.image_prompt}}
+                        </div>
+                        <div v-if="shot.video_prompt" class="s2-shot-vid-prompt">
+                          <div class="s2-shot-prompt-lbl">视频提示词</div>{{shot.video_prompt}}
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <!-- Confirm / regen actions (not for directions which auto-advances on click) -->
+                  <div v-if="stage.status==='awaiting' && stage.id!=='directions'" class="s2-actions">
+                    <input class="s2-feedback-input" v-model="mangaFeedback" placeholder="可选：写修改意见后点重新生成..."/>
+                    <div class="s2-action-btns">
+                      <button class="s2-regen-btn" @click="regenMangaStage(si)">↻ 重新生成</button>
+                      <button class="s2-confirm-btn" @click="confirmMangaStage(si)">确认继续 →</button>
+                    </div>
+                  </div>
+                  <!-- Production tasks -->
+                  <template v-if="stage.id==='production' && stage.tasks?.length">
+                    <div class="s2-prod-hdr">
+                      <span>{{agentPhase===3&&agentTasks.every(t=>t.status==='done')?'✅ 全部完成':agentPhase===3?'⚠️ 部分完成':'⚡ 生成中...'}}</span>
+                      <button class="btn-sm" v-if="agentPhase>=3" @click="mangaReset">重新开始</button>
+                    </div>
+                    <div class="agent-task-cards">
+                      <div v-for="(task,ti) in stage.tasks" :key="ti" class="agent-task-card">
+                        <div class="agent-task-header">
+                          <div class="agent-task-label">{{task.label}}</div>
+                          <span class="agent-task-status" :style="{background:task.status==='done'?'rgba(0,184,148,.15)':task.status==='error'?'rgba(225,112,85,.15)':'rgba(255,255,255,.06)',color:task.status==='done'?'#00b894':task.status==='error'?'var(--error)':'var(--muted)'}">
+                            {{task.status==='done'?'✓ 完成':task.status==='error'?'✗ 失败':task.status==='loading'?'生成中':'等待'}}
+                          </span>
+                        </div>
+                        <div v-if="task.scene" class="agent-task-prompt">📍 {{task.scene}}</div>
+                        <div v-if="task.narration" class="agent-task-narration">🎙️ {{task.narration}}</div>
+                        <div v-if="task.status==='loading'" class="gen-progress" style="padding:0 0 8px">
+                          <div class="progress-bar-wrap"><div class="progress-bar" :style="{width:task.progress+'%'}"></div></div>
+                          <div class="progress-text">{{task.progressText}} {{task.progress}}%</div>
+                        </div>
+                        <div v-if="task.results?.length" class="agent-task-result">
+                          <template v-if="task.category==='image'">
+                            <img v-for="url in task.results" :key="url" :src="url" style="max-width:100%;border-radius:8px;display:block"/>
+                          </template>
+                          <template v-else>
+                            <video v-for="url in task.results" :key="url" :src="url" controls></video>
+                          </template>
+                          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+                            <button class="btn-sm" @click="window.open(task.results[0],'_blank')">⬇ 下载</button>
+                            <button class="btn-sm" @click="navigator.clipboard.writeText(task.results[0]).then(()=>alert('已复制'))">🔗 复制链接</button>
+                            <button class="btn-sm" @click="agentTaskRerun(task)">🔄 重新生成</button>
+                          </div>
+                        </div>
+                        <div v-if="task.status==='error'">
+                          <div style="color:var(--error);font-size:12px;margin-bottom:6px">❌ {{task.error}}</div>
+                          <button class="btn-sm" @click="agentTaskRerun(task)">🔄 重试</button>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Phase 1: Planning stream -->
+        <template v-else-if="agentPhase===1">
+          <div class="agent-msgs">
+            <div class="agent-msg">
+              <div class="agent-msg-user">
+                <div class="agent-msg-user-bubble">
+                  <div v-if="agentLastInput?.images?.length" class="agent-msg-user-imgs">
+                    <img v-for="url in agentLastInput.images" :key="url" :src="url"/>
+                  </div>
+                  <span>{{agentLastInput?.text}}</span>
+                </div>
+              </div>
+            </div>
+            <div class="agent-msg">
+              <div class="agent-msg-ai">
+                <div class="agent-msg-ai-avatar">🤖</div>
+                <div class="agent-msg-ai-content">
+                  <div class="agent-msg-ai-label">🧠 AI 正在规划任务...</div>
+                  <div class="agent-planning-bubble">{{agentStreaming || '...' }}<span class="cursor-blink"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Phase 2/3: Task cards -->
+        <template v-else-if="agentPhase>=2">
+          <div class="agent-msgs">
+            <!-- User bubble -->
+            <div class="agent-msg">
+              <div class="agent-msg-user">
+                <div class="agent-msg-user-bubble">
+                  <div v-if="agentLastInput?.images?.length" class="agent-msg-user-imgs">
+                    <img v-for="url in agentLastInput.images" :key="url" :src="url"/>
+                  </div>
+                  <span>{{agentLastInput?.text}}</span>
+                </div>
+              </div>
+            </div>
+            <!-- AI task results -->
+            <div class="agent-msg">
+              <div class="agent-msg-ai">
+                <div class="agent-msg-ai-avatar">🤖</div>
+                <div class="agent-msg-ai-content">
+                  <div class="agent-status-bar">
+                    <span class="agent-status-text">
+                      {{ agentPhase===3 && agentTasks.every(t=>t.status==='done') ? '✅ 全部完成'
+                         : agentPhase===3 ? '⚠️ 部分完成'
+                         : '⚡ 生成中...' }}
+                    </span>
+                    <button class="btn-sm" @click="agentReset">重新开始</button>
+                  </div>
+                  <div class="agent-task-cards">
+                    <div v-for="(task,ti) in agentTasks" :key="ti" class="agent-task-card">
+                      <div class="agent-task-header">
+                        <div class="agent-task-label">{{task.label}}</div>
+                        <span class="agent-task-status" :style="{
+                          background: task.status==='done'?'rgba(0,184,148,.15)':task.status==='error'?'rgba(225,112,85,.15)':'rgba(255,255,255,.06)',
+                          color: task.status==='done'?'#00b894':task.status==='error'?'var(--error)':'var(--muted)'
+                        }">
+                          {{task.status==='done'?'✓ 完成':task.status==='error'?'✗ 失败':task.status==='loading'?'生成中':'等待'}}
+                        </span>
+                      </div>
+                      <div class="agent-task-prompt">{{task.prompt}}</div>
+                      <div v-if="task.narration" class="agent-task-narration">🎙️ {{task.narration}}</div>
+                      <div v-if="task.status==='loading'" class="gen-progress" style="padding:0 0 8px">
+                        <div class="progress-bar-wrap"><div class="progress-bar" :style="{width:task.progress+'%'}"></div></div>
+                        <div class="progress-text">{{task.progressText}} {{task.progress}}%</div>
+                      </div>
+                      <div v-if="task.results&&task.results.length" class="agent-task-result">
+                        <template v-if="task.category==='image'">
+                          <img v-for="url in task.results" :key="url" :src="url" @click="openLightbox(url)"/>
+                        </template>
+                        <template v-if="task.category==='video'">
+                          <video v-for="url in task.results" :key="url" :src="url" controls></video>
+                        </template>
+                        <div style="margin-top:6px;display:flex;gap:6px">
+                          <button class="btn-sm" @click="window.open(task.results[0],'_blank')">⬇ 下载</button>
+                          <button class="btn-sm" @click="navigator.clipboard.writeText(task.results[0]).then(()=>alert('已复制'))">🔗 复制链接</button>
+                        </div>
+                      </div>
+                      <div v-if="task.status==='error'">
+                        <div style="color:var(--error);font-size:12px;margin-bottom:6px">❌ {{task.error}}</div>
+                        <button class="btn-sm" @click="agentTaskRerun(task)">🔄 重试</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
       </template>
 
       <!-- GENERATION mode -->
@@ -396,24 +894,99 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     </div>
 
     <!-- ── Role Strip (video only) ── -->
-    <div class="role-strip-outer" v-if="activeCategory==='video'" @click.self="rolePopover=null">
+    <div class="role-strip-outer" v-if="activeCategory==='video'">
       <div class="role-strip-scroll">
         <div v-for="role in VIDEO_ROLES" :key="role.id"
              class="role-strip-item"
              :class="{active: selectedRole?.id === role.id}"
-             @click.stop="toggleRole(role)">
-          <!-- Popover card -->
-          <div class="role-popover" v-if="rolePopover?.id === role.id">
-            <div class="role-popover-name">{{ role.name }}</div>
-            <div class="role-popover-desc">{{ role.desc }}</div>
-          </div>
+             @click.stop="toggleRole(role, $event)">
           <img class="role-strip-avatar" :src="role.avatar" :alt="role.name" loading="lazy">
+        </div>
+      </div>
+    </div>
+    <!-- Role popover (fixed, outside scroll) -->
+    <div class="role-popover" v-if="rolePopover" :style="rolePopoverStyle" @click.stop>
+      <div class="role-popover-name">{{ rolePopover.name }}</div>
+      <div class="role-popover-desc">{{ rolePopover.desc }}</div>
+    </div>
+
+    <!-- ── Agent Bottom Input Bar ── -->
+    <div class="agent-input-bar" v-if="activeCategory==='agents' && agentSelected && (agentPhase===0 || agentPhase===3)">
+      <!-- Global Settings panel (manga agents only) -->
+      <div class="manga-settings-panel" v-if="isMangaAgent && mangaSettingsOpen">
+        <div class="manga-settings-title">⚙ 全局设置</div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">生成方式</span>
+          <div class="manga-gen-modes">
+            <button v-for="m in [{v:'precise',l:'精准'},{v:'fuzzy',l:'模糊'},{v:'fast',l:'快速'}]" :key="m.v"
+                    :class="['manga-gen-btn',{active:mangaSettings.genMode===m.v}]"
+                    @click="mangaSettings.genMode=m.v">{{m.l}}</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">视频比例</span>
+          <div class="manga-gen-modes">
+            <button :class="['manga-gen-btn',{active:mangaSettings.ratio==='9:16'}]" @click="mangaSettings.ratio='9:16'">🎬 竖屏 9:16</button>
+            <button :class="['manga-gen-btn',{active:mangaSettings.ratio==='16:9'}]" @click="mangaSettings.ratio='16:9'">🖥 横屏 16:9</button>
+            <button :class="['manga-gen-btn',{active:mangaSettings.ratio==='1:1'}]"  @click="mangaSettings.ratio='1:1'">⬛ 方形 1:1</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">最大重试次数</span>
+          <div class="manga-spinner-row">
+            <button class="manga-spin-btn" @click="mangaSettings.maxRetries=Math.max(1,mangaSettings.maxRetries-1)">−</button>
+            <span class="manga-spin-val">{{mangaSettings.maxRetries}}</span>
+            <button class="manga-spin-btn" @click="mangaSettings.maxRetries=Math.min(5,mangaSettings.maxRetries+1)">+</button>
+          </div>
+        </div>
+        <div class="manga-settings-row">
+          <span class="manga-settings-label">资产一致性合格分</span>
+          <div class="manga-spinner-row">
+            <button class="manga-spin-btn" @click="mangaSettings.qualityScore=Math.max(50,mangaSettings.qualityScore-5)">−</button>
+            <span class="manga-spin-val">{{mangaSettings.qualityScore}}</span>
+            <button class="manga-spin-btn" @click="mangaSettings.qualityScore=Math.min(100,mangaSettings.qualityScore+5)">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="agent-upload-row" v-if="agentSelected.needsImages">
+        <div v-for="(url,i) in agentImages" :key="url" class="agent-upload-card has-img"
+             @click="agentImages.splice(i,1)">
+          <img :src="url"/>
+          <div class="agent-upload-del">×</div>
+        </div>
+        <div v-if="agentImages.length < agentSelected.maxImages"
+             class="agent-upload-card empty" @click="$refs.agentFile.click()">
+          <div class="agent-upload-plus">+</div>
+          <div class="agent-upload-lbl">添加图片</div>
+        </div>
+        <input ref="agentFile" type="file" accept="image/*" style="display:none" @change="agentUploadImg"/>
+      </div>
+      <div class="agent-input-row">
+        <div class="agent-textarea-wrap">
+          <textarea class="agent-prompt-input" v-model="agentText"
+                    :placeholder="agentSelected.textPlaceholder || '输入描述...'"
+                    @keydown.enter.ctrl.prevent="isMangaAgent ? runMangaPipeline() : runAgentPlan()"
+                    rows="2"></textarea>
+        </div>
+        <div class="agent-input-right">
+          <button class="agent-send-btn" @click="isMangaAgent ? runMangaPipeline() : runAgentPlan()"
+                  :disabled="!agentText.trim() || agentPlanning">➤</button>
+          <div class="agent-mode-toggle">
+            <button :class="['agent-mode-btn', {active: agentMode==='step'}]"
+                    @click="agentMode='step'">逐步确认</button>
+            <button :class="['agent-mode-btn', {active: agentMode==='auto'}]"
+                    @click="agentMode='auto'">智能托管</button>
+            <button v-if="isMangaAgent"
+                    :class="['agent-mode-btn', {active: mangaSettingsOpen}]"
+                    @click="mangaSettingsOpen=!mangaSettingsOpen"
+                    title="全局设置">⚙</button>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ── Bottom Input ── -->
-    <div class="input-area" v-if="activeCategory!=='works'">
+    <div class="input-area" v-if="activeCategory!=='works' && activeCategory!=='agents'">
       <!-- Reference chips -->
       <div class="input-refs" v-if="activeCategory!=='chat' && (refs.length || true)">
         <div v-for="(ref,ri) in refs" :key="ri" class="ref-chip">
@@ -480,6 +1053,60 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
           </div>
         </div>
         <button class="send-btn" @click="submit" :disabled="isLoading || !promptText.trim()" :style="isLoading ? 'opacity:.4' : ''">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Role Director Modal ── -->
+  <div class="role-modal-overlay" v-if="directorModal" @click.self="directorModal=null">
+    <div class="role-modal-box">
+      <!-- Header -->
+      <div class="role-modal-header">
+        <img class="role-modal-avatar" :src="directorModal.role.avatar" :alt="directorModal.role.name">
+        <span class="role-modal-title-text">{{ directorModal.role.name }}</span>
+        <button class="role-modal-close" @click="directorModal=null">✕</button>
+      </div>
+      <!-- Progress Bar -->
+      <div class="role-modal-progress">
+        <div class="role-progress-bar">
+          <div v-for="(stage,i) in ['调度','思考','构建','完成']" :key="stage" class="role-progress-step">
+            <div class="role-progress-dot" :class="{done: directorModal.stage > i, active: directorModal.stage === i}">
+              <span v-if="directorModal.stage > i">✓</span>
+            </div>
+            <div class="role-progress-line" v-if="i < 3" :class="{done: directorModal.stage > i}"></div>
+          </div>
+        </div>
+        <div class="role-progress-labels">
+          <span v-for="stage in ['调度','思考','构建','完成']" :key="stage">{{ stage }}</span>
+        </div>
+      </div>
+      <!-- Status -->
+      <div class="role-modal-status" v-if="directorModal.stage < 4">
+        <span class="role-modal-spinner"></span> {{ ['正在调度模型...','深度思考中...','构建提示词...',''][directorModal.stage] }}
+      </div>
+      <div class="role-modal-status done" v-else>
+        <span style="color:#4ade80;font-size:16px">✓</span> 生成完成
+      </div>
+      <!-- Results -->
+      <template v-if="directorModal.result">
+        <div class="role-result-block explanation">
+          <div class="role-result-label"><span class="role-result-icon">💡</span> 创意说明</div>
+          <div class="role-result-text">{{ directorModal.result.explanation }}</div>
+        </div>
+        <div class="role-result-block cn-prompt">
+          <div class="role-result-label"><span class="role-result-badge cn">CN</span> 中文提示词</div>
+          <div class="role-result-text">{{ directorModal.result.cnPrompt }}</div>
+        </div>
+        <div class="role-result-block en-prompt">
+          <div class="role-result-label"><span class="role-result-badge en">EN</span> 英文提示词</div>
+          <div class="role-result-text">{{ directorModal.result.enPrompt }}</div>
+        </div>
+      </template>
+      <!-- Actions -->
+      <div class="role-modal-actions" v-if="directorModal.result">
+        <button class="role-btn-regen" @click="directorRegen">↻ 重新生成</button>
+        <button class="role-btn-cn" @click="directorUse('cn')">使用中文提示词</button>
+        <button class="role-btn-en" @click="directorUse('en')">使用英文提示词</button>
       </div>
     </div>
   </div>
@@ -656,6 +1283,42 @@ const ALL_MODELS_MAP = {}
 ;[...CHAT_MODELS,...IMAGE_MODELS,...VIDEO_MODELS,...MUSIC_MODELS].forEach(m => ALL_MODELS_MAP[m.id]=m)
 
 // ── Markdown renderer (basic) ──────────────────────────────────────────────
+// Robust JSON parser for LLM output — handles markdown wrappers, trailing junk,
+// and broken arrays by extracting individual complete {...} objects as fallback.
+function parseLooseJson(raw) {
+  if (!raw) return null
+  // 1. Strict parse on stripped markdown
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+  try { return JSON.parse(stripped) } catch {}
+  // 2. Find first array or object pattern, parse strictly
+  const m = stripped.match(/(\[[\s\S]*\]|\{[\s\S]*\})/)
+  if (m) {
+    try { return JSON.parse(m[0]) } catch {}
+    // 3. Per-object recovery — walk and extract balanced {...} blocks
+    if (m[0].startsWith('[')) {
+      const objs = []
+      let depth = 0, inStr = false, esc = false, start = -1
+      for (let i = 0; i < m[0].length; i++) {
+        const c = m[0][i]
+        if (esc) { esc = false; continue }
+        if (c === '\\') { esc = true; continue }
+        if (c === '"') { inStr = !inStr; continue }
+        if (inStr) continue
+        if (c === '{') { if (depth === 0) start = i; depth++ }
+        else if (c === '}') {
+          depth--
+          if (depth === 0 && start >= 0) {
+            try { objs.push(JSON.parse(m[0].slice(start, i + 1))) } catch {}
+            start = -1
+          }
+        }
+      }
+      if (objs.length) return objs
+    }
+  }
+  return null
+}
+
 function renderMd(text) {
   if (!text) return ''
   let t = text
@@ -689,6 +1352,14 @@ createApp({
     const promptText = ref('')
     const selectedRole = ref(null)
     const rolePopover = ref(null)
+    const rolePopoverPos = ref(null)
+    const directorModal = ref(null)  // { role, stage:0-4, result:{explanation,cnPrompt,enPrompt}|null, pendingPrompt }
+    const rolePopoverStyle = computed(() => rolePopoverPos.value ? {
+      position: 'fixed',
+      top: (rolePopoverPos.value.top - 108) + 'px',
+      left: rolePopoverPos.value.centerX + 'px',
+      transform: 'translateX(-50%)',
+    } : {})
     const webSearch = ref(false)
     const deepThink = ref(false)
     const lyricsText = ref('')
@@ -707,11 +1378,454 @@ createApp({
     const lightboxUrl = ref(null)
     const worksFilter = ref('all')
 
+    // ── Agent state ──────────────────────────────────────────
+    const AGENTS = [
+      { id:'ecommerce', icon:'🛍️', name:'电商一键生图', badge:'图片',
+        bg:'linear-gradient(135deg,#f59e0b,#92400e)', accentColor:'#fbbf24', badgeStyle:'background:rgba(253,203,110,.2);color:#fdcb6e',
+        desc:'上传商品图，AI智能规划6张电商精品图', needsImages:true, maxImages:3,
+        textLabel:'商品名称和描述', textPlaceholder:'例：AirPods Pro 耳机，主打主动降噪，银色配色，面向年轻用户...',
+        features:[
+          {num:'01',title:'商品智能分析',desc:'自动识别商品特征、材质和核心卖点'},
+          {num:'02',title:'出图需求规划',desc:'根据商品类型推荐最佳场景和拍摄角度'},
+          {num:'03',title:'一键批量生图',desc:'全自动执行6张高品质电商图'},
+        ]},
+      { id:'general_image', icon:'🎨', name:'通用一键生图', badge:'图片',
+        bg:'linear-gradient(135deg,#8b5cf6,#4c1d95)', accentColor:'#a78bfa', badgeStyle:'background:rgba(139,92,246,.2);color:#a78bfa',
+        desc:'上传参考图，AI生成6张多角度系列图', needsImages:true, maxImages:3,
+        textLabel:'创意描述', textPlaceholder:'例：复古咖啡馆场景，温暖灯光，现代与传统结合...',
+        features:[
+          {num:'01',title:'风格智能理解',desc:'深度分析参考图的构图和视觉风格'},
+          {num:'02',title:'多角度规划',desc:'AI自动规划6个最佳拍摄角度'},
+          {num:'03',title:'批量精品出图',desc:'一键生成风格统一的系列作品'},
+        ]},
+      { id:'manga_s2', icon:'🎬', name:'AI漫剧 S2.0', badge:'视频',
+        bg:'linear-gradient(135deg,#ec4899,#831843)', accentColor:'#f472b6', badgeStyle:'background:rgba(236,72,153,.2);color:#f472b6',
+        desc:'上传参考图，AI自动生成5幕漫剧视频', needsImages:true, maxImages:9,
+        textLabel:'漫剧主题/故事方向', textPlaceholder:'例：都市白领在雨夜找到丢失多年的钢琴，回忆涌来...',
+        features:[
+          {num:'01',title:'角色一致性保持',desc:'参考图锁定角色形象贯穿全剧'},
+          {num:'02',title:'五幕剧情规划',desc:'AI自动编排起承转合的故事结构'},
+          {num:'03',title:'漫剧视频生成',desc:'逐幕生成高质量漫剧视频片段'},
+        ]},
+      { id:'manga_plot', icon:'📖', name:'AI漫剧 剧情版', badge:'视频',
+        bg:'linear-gradient(135deg,#06b6d4,#164e63)', accentColor:'#22d3ee', badgeStyle:'background:rgba(6,182,212,.2);color:#22d3ee',
+        desc:'输入剧情文案，AI自动编排5幕漫剧视频', needsImages:false, maxImages:0,
+        textLabel:'剧情文案', textPlaceholder:'在这里输入你的故事、剧情或想法...',
+        features:[
+          {num:'01',title:'剧情深度分析',desc:'AI理解故事主题、情感和节奏节拍'},
+          {num:'02',title:'分镜智能规划',desc:'自动将文字转化为视觉分镜脚本'},
+          {num:'03',title:'五幕视频生成',desc:'一键生成完整漫剧视频序列'},
+        ]},
+      { id:'manga_narration', icon:'🎙️', name:'AI漫剧 解说版', badge:'视频',
+        bg:'linear-gradient(135deg,#10b981,#065f46)', accentColor:'#34d399', badgeStyle:'background:rgba(16,185,129,.2);color:#34d399',
+        desc:'输入内容，生成抖音解说风格视频', needsImages:false, maxImages:0,
+        textLabel:'解说内容或话题', textPlaceholder:'例：讲解一部电影的精彩剧情，或一个有趣的历史事件...',
+        features:[
+          {num:'01',title:'解说稿智能拆解',desc:'将长文拆分为节奏感强的解说片段'},
+          {num:'02',title:'场景视觉匹配',desc:'每段解说自动匹配最适合的视觉场景'},
+          {num:'03',title:'抖音风格视频',desc:'生成符合短视频平台调性的成品'},
+        ]},
+      { id:'multi_frame', icon:'🎞️', name:'智能多帧', badge:'视频',
+        bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)', accentColor:'#60a5fa', badgeStyle:'background:rgba(59,130,246,.2);color:#60a5fa',
+        desc:'上传多张图片，AI串联成流畅长视频', needsImages:true, maxImages:9,
+        textLabel:'视频整体风格描述（可选）', textPlaceholder:'例：电影感，慢节奏，忧郁氛围，冷色调...',
+        features:[
+          {num:'01',title:'多帧智能排序',desc:'AI分析图片内容，自动规划最佳顺序'},
+          {num:'02',title:'转场流畅设计',desc:'每两帧之间设计自然流畅的转场'},
+          {num:'03',title:'一镜到底视频',desc:'生成连贯流畅的长视频成片'},
+        ]},
+    ]
+    const agentSelected   = ref(null)
+    const agentPhase      = ref(0)   // 0=input 1=planning 2=executing 3=done
+    const agentText       = ref('')
+    const agentImages     = ref([])
+    const agentStreaming  = ref('')
+    const agentTasks      = ref([])
+    const agentPlanning   = ref(false)
+    const agentMode       = ref('auto')  // 'auto' | 'step'
+    const agentLastInput  = ref(null)    // { text, images } — saved at plan start for display
+
+    // ── Manga S2.0 pipeline state ────────────────────────
+    const mangaStages      = ref([])
+    const mangaContext     = ref({})
+    const mangaFeedback    = ref('')
+    const mangaSettingsOpen = ref(false)
+    const mangaSettings    = reactive({ genMode: 'precise', maxRetries: 2, qualityScore: 80, ratio: '9:16' })
+    const isMangaAgent     = computed(() => ['manga_s2','manga_plot','manga_narration'].includes(agentSelected.value?.id))
+
+    function selectAgent(a) {
+      agentSelected.value  = a
+      agentPhase.value     = 0
+      agentText.value      = ''
+      agentImages.value    = []
+      agentStreaming.value = ''
+      agentTasks.value     = []
+      agentPlanning.value  = false
+      agentLastInput.value = null
+    }
+
+    function agentReset() {
+      agentPhase.value     = 0
+      agentStreaming.value = ''
+      agentTasks.value     = []
+      agentLastInput.value = null
+    }
+
+    async function agentUploadImg(e) {
+      const file = e.target.files[0]
+      if (!file) return
+      const form = new FormData()
+      form.append('file', file)
+      try {
+        const r = await fetch('/api/upload', { method:'POST', body:form })
+        const d = await r.json()
+        agentImages.value.push(d.url)
+      } catch(err) { alert('上传失败') }
+      e.target.value = ''
+    }
+
+    async function runAgentPlan() {
+      const agent = agentSelected.value
+      if (!agent || !agentText.value.trim()) return
+      agentLastInput.value = { text: agentText.value.trim(), images: [...agentImages.value] }
+      agentPlanning.value  = true
+      agentPhase.value     = 1
+      agentStreaming.value = ''
+      agentTasks.value     = []
+
+      try {
+        const r = await fetch('/api/agent/plan', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ agent_type:agent.id, text:agentText.value, images:agentImages.value })
+        })
+        if (!r.ok) throw new Error('plan API error ' + r.status)
+        const reader = r.body.getReader()
+        const dec = new TextDecoder()
+        let full = ''
+        while (true) {
+          const {done,value} = await reader.read()
+          if (done) break
+          for (const line of dec.decode(value).split('\n')) {
+            if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+              try {
+                const d = JSON.parse(line.slice(6))
+                if (d.error) throw new Error(d.error)
+                if (d.text) { full += d.text; agentStreaming.value = full }
+              } catch(e) { if (!(e instanceof SyntaxError)) throw e }
+            }
+          }
+        }
+        const clean = full.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim()
+        let plan
+        try { plan = JSON.parse(clean) }
+        catch { const m = full.match(/\[[\s\S]*\]/); if (m) plan = JSON.parse(m[0]); else throw new Error('plan parse failed') }
+
+        agentTasks.value = plan.map(p => reactive({ ...p, status:'pending', progress:0, progressText:'等待中', results:[], error:null }))
+        agentPhase.value = 2
+        executeAgentTasks()
+      } catch(e) {
+        agentPhase.value = 0
+        alert('规划失败：' + e.message)
+      } finally {
+        agentPlanning.value = false
+      }
+    }
+
+    async function execSingleAgentTask(task) {
+      task.status = 'loading'
+      task.error  = null
+      task.results = []
+      task.progress = 0
+      task.progressText = '提交中...'
+
+      const params = { ...(task.params || {}) }
+      if (task.category === 'image' && agentImages.value.length > 0) {
+        const aid = agentSelected.value?.id
+        if (aid === 'ecommerce' || aid === 'general_image') params.images = agentImages.value
+      }
+
+      const MAX_RETRIES = 2
+      let lastErr = null
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 1) { task.progressText = `自动重试 (${attempt}/${MAX_RETRIES})...`; await sleep(2000) }
+          const resp = await fetch('/api/generate', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ source:'data999', model:task.model, prompt:task.prompt, params })
+          })
+          if (!resp.ok) { const err = await resp.json().catch(()=>({detail:'未知错误'})); throw new Error(err.detail||JSON.stringify(err)) }
+          const data = await resp.json()
+          if (data.result_urls) {
+            task.results = data.result_urls; task.status = 'done'; task.progress = 100
+          } else {
+            task.progressText = '排队中...'
+            await pollAgentTask(task, data.task_id, data.source)
+          }
+          lastErr = null; break
+        } catch(e) { lastErr = e; if (attempt < MAX_RETRIES) continue }
+      }
+      if (lastErr) { task.error = lastErr.message; task.status = 'error' }
+    }
+
+    async function pollAgentTask(task, taskId, source) {
+      const start = Date.now()
+      let fails = 0
+      while (Date.now() - start < 7200000) {
+        await sleep(8000)
+        try {
+          const r = await fetch(`/api/status/${taskId}?source=${source}`)
+          const d = await r.json()
+          fails = 0
+          task.progress = d.progress || 0
+          task.progressText = d.progress_text || d.status || '生成中...'
+          if (d.is_final) {
+            if (d.error) throw new Error(d.error)
+            task.results = d.result_urls || []; task.status = 'done'; return
+          }
+        } catch(e) { if (++fails >= 3) throw e }
+      }
+      throw new Error('生成超时')
+    }
+
+    async function executeAgentTasks() {
+      await Promise.all(agentTasks.value.map(execSingleAgentTask))
+      agentPhase.value = 3
+    }
+
+    async function agentTaskRerun(task) {
+      // Upgrade legacy params for doubao-seedance tasks saved before the param-fix.
+      // Old shape: {duration, aspect_ratio} → new: {audio_duration, ratio, resolution, generate_audio}
+      if (task.model === 'doubao-seedance-1-5-pro-251215') {
+        const p = task.params || {}
+        if (p.duration && !p.audio_duration) {
+          const n = Number(p.duration) || 5
+          p.audio_duration = n <= 6 ? '4' : n <= 10 ? '8' : '12'
+          delete p.duration
+        }
+        if (p.aspect_ratio && !p.ratio) {
+          p.ratio = p.aspect_ratio
+          delete p.aspect_ratio
+        }
+        if (!p.resolution) p.resolution = '1080p'
+        if (p.generate_audio === undefined) p.generate_audio = true
+        task.params = p
+      }
+      await execSingleAgentTask(task)
+    }
+
+    // ── Manga S2.0 Pipeline functions ───────────────────
+    function initMangaStages() {
+      const id = agentSelected.value?.id
+      if (id === 'manga_s2') {
+        mangaStages.value = [
+          { id:'intent',     label:'意图分析', icon:'🔍', status:'pending', streaming:'', result:null, error:null },
+          { id:'directions', label:'创意方向', icon:'🎭', status:'pending', streaming:'', result:null, error:null, selectedIdx:null },
+          { id:'storyboard', label:'分镜脚本', icon:'🎬', status:'pending', streaming:'', result:null, error:null },
+          { id:'production', label:'视频制作', icon:'🎥', status:'pending', streaming:'', result:null, error:null, tasks:[] },
+        ]
+      } else if (id === 'manga_plot') {
+        mangaStages.value = [
+          { id:'plot_storyboard', label:'分镜规划', icon:'🎬', status:'pending', streaming:'', result:null, error:null },
+          { id:'production',      label:'视频制作', icon:'🎥', status:'pending', streaming:'', result:null, error:null, tasks:[] },
+        ]
+      } else if (id === 'manga_narration') {
+        mangaStages.value = [
+          { id:'narration_storyboard', label:'内容分镜', icon:'🎙️', status:'pending', streaming:'', result:null, error:null },
+          { id:'production',           label:'视频制作', icon:'🎥', status:'pending', streaming:'', result:null, error:null, tasks:[] },
+        ]
+      }
+    }
+
+    async function runMangaPipeline() {
+      if (!agentSelected.value || !agentText.value.trim()) return
+      agentLastInput.value = { text: agentText.value.trim(), images: [...agentImages.value] }
+      agentPhase.value  = 1
+      mangaContext.value = { text: agentText.value.trim() }
+      mangaFeedback.value = ''
+      initMangaStages()
+      await nextTick()
+      scrollBottom()
+      await runMangaStage(0)
+    }
+
+    async function runMangaStage(idx, feedback = '') {
+      const stage = mangaStages.value[idx]
+      if (!stage) return
+      stage.status    = 'running'
+      stage.streaming = ''
+      stage.error     = null
+      stage.result    = null
+      await nextTick(); scrollBottom()
+
+      try {
+        const r = await fetch('/api/manga/stage', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ stage: stage.id, context: mangaContext.value, images: agentImages.value, feedback, settings: { ...mangaSettings } })
+        })
+        if (!r.ok) throw new Error('API error ' + r.status)
+        const reader = r.body.getReader()
+        const dec = new TextDecoder()
+        let full = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          for (const line of dec.decode(value).split('\n')) {
+            if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+              try {
+                const d = JSON.parse(line.slice(6))
+                if (d.error) throw new Error(d.error)
+                if (d.text) { full += d.text; stage.streaming = full; scrollBottom() }
+              } catch(e) { if (!(e instanceof SyntaxError)) throw e }
+            }
+          }
+        }
+        // Parse JSON — robust: try strict, then markdown-strip, then array regex,
+        // then per-object recovery (extracts complete {...} blocks even if outer array is broken)
+        const parsed = parseLooseJson(full)
+        if (parsed === null) throw new Error('解析失败，请重试')
+        stage.result = parsed
+        stage.status = 'awaiting'
+        await nextTick(); scrollBottom()
+      } catch(e) {
+        stage.error  = e.message
+        stage.status = 'error'
+      }
+    }
+
+    async function confirmMangaStage(idx) {
+      const stage = mangaStages.value[idx]
+      if (!stage || stage.status !== 'awaiting') return
+      // Save result into context
+      if (stage.id === 'intent') mangaContext.value.intent_result = stage.result
+      else if (['storyboard','plot_storyboard','narration_storyboard'].includes(stage.id)) mangaContext.value.storyboard = stage.result
+      stage.status = 'done'
+      mangaFeedback.value = ''
+      const nextIdx = idx + 1
+      if (nextIdx < mangaStages.value.length) {
+        const next = mangaStages.value[nextIdx]
+        if (next.id === 'production') { next.status = 'running'; runMangaProduction() }
+        else await runMangaStage(nextIdx)
+      }
+    }
+
+    async function regenMangaStage(idx) {
+      const fb = mangaFeedback.value
+      mangaFeedback.value = ''
+      await runMangaStage(idx, fb)
+    }
+
+    function selectMangaDirection(stageIdx, dirIdx) {
+      const stage = mangaStages.value[stageIdx]
+      if (!stage || !stage.result || stage.status !== 'awaiting') return
+      stage.selectedIdx = dirIdx
+      mangaContext.value.selected_direction = stage.result[dirIdx]
+      stage.status = 'done'
+      const nextIdx = stageIdx + 1
+      if (nextIdx < mangaStages.value.length) {
+        const next = mangaStages.value[nextIdx]
+        if (next.id === 'production') { next.status = 'running'; runMangaProduction() }
+        else runMangaStage(nextIdx)
+      }
+    }
+
+    async function runMangaProduction() {
+      const prodStage = mangaStages.value.find(s => s.id === 'production')
+      if (!prodStage) return
+      const shots = mangaContext.value.storyboard
+      if (!shots?.length) { prodStage.status = 'error'; prodStage.error = '没有分镜数据'; return }
+
+      // Snap duration to doubao-seedance valid values: 4/8/12
+      const snapDuration = (d) => {
+        const n = Number(d) || 5
+        if (n <= 6) return '4'
+        if (n <= 10) return '8'
+        return '12'
+      }
+
+      // Phase A: KEYFRAME tasks — kling-image-o1 has best character consistency
+      // All keyframes use the SAME reference photos → identical character/style across shots
+      const keyTasks = shots.map((shot, i) => reactive({
+        label: `第${shot.shot || i+1}帧 · 🖼 关键帧 · ${shot.title || ''}`,
+        prompt: shot.image_prompt || shot.video_prompt || '',
+        model: 'kling-image-o1',
+        category: 'image',
+        phase: 'keyframe',
+        shotIdx: i,
+        params: {
+          aspect_ratio: mangaSettings.ratio,
+          resolution: '1k',
+          ...(agentImages.value.length ? { images: agentImages.value } : {}),
+        },
+        narration: shot.narration || shot.dialogue || '',
+        scene: shot.scene || '',
+        status: 'pending', progress: 0, progressText: '等待中', results: [], error: null
+      }))
+
+      // Phase B: VIDEO tasks — uses keyframe as first frame → animation matches keyframe exactly
+      const videoTasks = shots.map((shot, i) => reactive({
+        label: `第${shot.shot || i+1}帧 · 🎬 视频 · ${shot.title || ''}`,
+        prompt: shot.video_prompt || shot.image_prompt || '',
+        model: 'doubao-seedance-1-5-pro-251215',
+        category: 'video',
+        phase: 'video',
+        shotIdx: i,
+        params: {
+          audio_duration: snapDuration(shot.duration),
+          resolution: '1080p',
+          ratio: mangaSettings.ratio,
+          generate_audio: true,
+          // images filled in after keyframe completes
+        },
+        narration: shot.narration || shot.dialogue || '',
+        scene: shot.scene || '',
+        status: 'pending', progress: 0, progressText: '等待关键帧...', results: [], error: null
+      }))
+
+      // Interleave: keyframe + video for each shot → user sees them paired
+      const allTasks = []
+      for (let i = 0; i < shots.length; i++) {
+        allTasks.push(keyTasks[i], videoTasks[i])
+      }
+      prodStage.tasks  = allTasks
+      agentTasks.value = allTasks
+      agentPhase.value = 2
+
+      // Phase A: generate all keyframes in parallel
+      await Promise.all(keyTasks.map(execSingleAgentTask))
+
+      // Phase B: each video uses its keyframe as the first frame
+      await Promise.all(videoTasks.map(async (vTask, i) => {
+        const kf = keyTasks[i]
+        if (kf.status === 'done' && kf.results?.length) {
+          vTask.params.images = [kf.results[0]]
+          await execSingleAgentTask(vTask)
+        } else {
+          vTask.status = 'error'
+          vTask.error = '关键帧失败，跳过视频'
+          vTask.progressText = ''
+        }
+      }))
+
+      prodStage.status = 'done'
+      agentPhase.value = 3
+    }
+
+    function mangaReset() {
+      mangaStages.value  = []
+      mangaContext.value = {}
+      mangaFeedback.value = ''
+      agentPhase.value   = 0
+      agentTasks.value   = []
+      agentLastInput.value = null
+      try { localStorage.removeItem(LS_AGENT_KEY) } catch(e) {}
+    }
+
     const categories = [
       { id:'chat', label:'文字' },
       { id:'image', label:'图片' },
       { id:'video', label:'视频' },
       { id:'music', label:'音乐' },
+      { id:'agents', label:'🤖智能体' },
       { id:'works', label:'🎨作品' },
     ]
 
@@ -794,7 +1908,9 @@ createApp({
     function switchCategory(cat) {
       activeCategory.value = cat
       selectedRole.value = null
-      if (cat === 'works') return
+      rolePopover.value = null
+      rolePopoverPos.value = null
+      if (cat === 'works' || cat === 'agents') return
       const models = cat==='chat'?CHAT_MODELS:cat==='image'?IMAGE_MODELS:cat==='video'?VIDEO_MODELS:MUSIC_MODELS
       if (models.length) selectedModelId.value = models[0].id
       refs.value = []
@@ -884,32 +2000,108 @@ createApp({
       }
     }
 
-    async function generate() {
-      const m = selectedModel.value
-      if (!m) return
+    const DIRECTOR_SYSTEM = `你是一名专业的短视频AI导演助手。用户给出一个简单的创意关键词或想法，你需要以导演视角进行创意解构，输出严格的JSON格式（不要有任何markdown代码块，直接返回JSON）：
+{"explanation":"创意说明，解释你从用户输入中提取的核心意象、风格与拍摄思路，2-4句话，口吻专业有激情","cnPrompt":"中文视频提示词，适合AI视频生成，包含镜头运动、光线氛围、画面构图、风格参考等细节，60-120字","enPrompt":"English video prompt for AI video generation, include camera movement, lighting, atmosphere, composition, style references, 60-120 words"}
+各角色会有自己的专业视角和风格倾向，请保持角色一致性。`
 
-      let prompt = promptText.value.trim()
-      promptText.value = ''
-      loadingModels[m.id] = true
-
-      // Role-based prompt enhancement
-      if (selectedRole.value) {
-        try {
-          const r = await fetch('/api/chat/sync', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-6',
-              messages: [{role:'user', content: prompt}],
-              system: selectedRole.value.system,
-            })
-          })
-          if (r.ok) {
-            const d = await r.json()
-            if (d.text) prompt = d.text
+    async function _runDirectorAPI(rawPrompt, roleObj) {
+      // /api/director embeds all instructions in the user message body —
+      // avoids lingkeai's [System:] prefix-ignoring bug
+      const r = await fetch('/api/director', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          role_id: roleObj.id,
+          raw_prompt: rawPrompt,
+          role_name: roleObj.name,
+          role_system: roleObj.system,
+        })
+      })
+      if (!r.ok) throw new Error('API error ' + r.status)
+      const reader = r.body.getReader()
+      const dec = new TextDecoder()
+      let full = ''
+      while (true) {
+        const {done, value} = await reader.read()
+        if (done) break
+        for (const line of dec.decode(value).split('\n')) {
+          if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+            try {
+              const d = JSON.parse(line.slice(6))
+              if (d.error) throw new Error(d.error)
+              full += d.text || ''
+            } catch(e) { if (!(e instanceof SyntaxError)) throw e }
           }
-        } catch(_) {}
+        }
       }
+      // Extract JSON — try clean parse first, then regex extraction
+      const clean = full.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim()
+      try { return JSON.parse(clean) } catch {}
+      const m = full.match(/\{[\s\S]*\}/)
+      if (m) return JSON.parse(m[0])
+      throw new Error('no JSON in response: ' + full.slice(0, 120))
+    }
+
+    async function _animateDirector(modal) {
+      // stage 0→1→2→3 with delays to simulate thinking
+      await new Promise(r => setTimeout(r, 400)); modal.stage = 1
+      await new Promise(r => setTimeout(r, 700)); modal.stage = 2
+      await new Promise(r => setTimeout(r, 500)); modal.stage = 3
+    }
+
+    async function openDirectorModal(rawPrompt) {
+      directorModal.value = { role: selectedRole.value, stage: 0, result: null, pendingPrompt: rawPrompt }
+      const modal = directorModal.value
+      const [result] = await Promise.all([
+        _runDirectorAPI(rawPrompt, selectedRole.value),
+        _animateDirector(modal),
+      ])
+      if (directorModal.value !== modal) return  // closed
+      modal.result = result
+      modal.stage = 4
+    }
+
+    async function directorRegen() {
+      const modal = directorModal.value
+      if (!modal) return
+      modal.result = null
+      modal.stage = 0
+      try {
+        const [result] = await Promise.all([
+          _runDirectorAPI(modal.pendingPrompt, modal.role),
+          _animateDirector(modal),
+        ])
+        if (directorModal.value !== modal) return
+        modal.result = result
+        modal.stage = 4
+      } catch(e) {
+        modal.result = { explanation: '生成失败，请重试', cnPrompt: modal.pendingPrompt, enPrompt: modal.pendingPrompt }
+        modal.stage = 4
+      }
+    }
+
+    function directorUse(lang) {
+      const modal = directorModal.value
+      if (!modal?.result) return
+      const chosenPrompt = lang === 'cn' ? modal.result.cnPrompt : modal.result.enPrompt
+      directorModal.value = null
+      // Put prompt into textarea for user to review/edit before sending
+      promptText.value = chosenPrompt
+      nextTick(() => {
+        const ta = document.querySelector('textarea')
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length) }
+      })
+    }
+
+    async function generate(overridePrompt) {
+      const m = selectedModel.value
+      console.log('[generate] overridePrompt=', !!overridePrompt, 'model=', m?.id, 'role=', selectedRole.value?.name, 'category=', activeCategory.value)
+      if (!m) { console.warn('[generate] NO MODEL - returning early'); return }
+
+      let prompt = overridePrompt ?? promptText.value.trim()
+      if (!overridePrompt) promptText.value = ''
+
+      loadingModels[m.id] = true
 
       // Build params
       const params = buildParams(m)
@@ -936,37 +2128,53 @@ createApp({
       await nextTick()
       scrollBottom()
 
-      try {
-        const resp = await fetch('/api/generate', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ source: card.source, model: m.apiId || m.id, prompt, params })
-        })
-        if (!resp.ok) {
-          const err = await resp.json().catch(()=>({detail:'未知错误'}))
-          throw new Error(err.detail || JSON.stringify(err))
+      const MAX_RETRIES = 2
+      let lastErr = null
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 1) {
+            card.error = null
+            card.loading = true
+            card.progress = 0
+            card.progressText = `自动重试 (${attempt}/${MAX_RETRIES})...`
+            await sleep(2000)
+          }
+          const resp = await fetch('/api/generate', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ source: card.source, model: m.apiId || m.id, prompt, params })
+          })
+          if (!resp.ok) {
+            const err = await resp.json().catch(()=>({detail:'未知错误'}))
+            throw new Error(err.detail || JSON.stringify(err))
+          }
+          const data = await resp.json()
+          // deepwl returns result_urls directly, no polling needed
+          if (data.result_urls) {
+            card.results = data.result_urls
+            card.loading = false
+            savePending()
+            saveWorks()
+          } else {
+            const {task_id, source} = data
+            card.taskId = task_id
+            card.progressText = '排队中...'
+            savePending()
+            await pollTask(card, task_id, source)
+          }
+          lastErr = null
+          break  // success
+        } catch(e) {
+          lastErr = e
+          if (attempt < MAX_RETRIES) continue
         }
-        const data = await resp.json()
-        // deepwl returns result_urls directly, no polling needed
-        if (data.result_urls) {
-          card.results = data.result_urls
-          card.loading = false
-          savePending()
-          saveWorks()
-        } else {
-          const {task_id, source} = data
-          card.taskId = task_id
-          card.progressText = '排队中...'
-          savePending()   // update with real taskId
-          await pollTask(card, task_id, source)
-        }
-      } catch(e) {
-        card.error = e.message
+      }
+      if (lastErr) {
+        card.error = lastErr.message
         card.loading = false
         savePending()
-      } finally {
-        delete loadingModels[m.id]
       }
+      delete loadingModels[m.id]
     }
 
     function buildParams(m) {
@@ -1045,28 +2253,32 @@ createApp({
     async function pollTask(card, taskId, source) {
       const maxMs = 7200000
       const start = Date.now()
+      let consecutiveFails = 0
       while (Date.now() - start < maxMs) {
         await sleep(8000)
         try {
           const r = await fetch(`/api/status/${taskId}?source=${source}`)
           const d = await r.json()
+          consecutiveFails = 0
           card.progress = d.progress || 0
           card.progressText = d.progress_text || d.status || '生成中...'
           if (d.is_final) {
-            if (d.error) { card.error = d.error }
-            else { card.results = d.result_urls || [] }
+            if (d.error) { throw new Error(d.error) }
+            card.results = d.result_urls || []
             card.loading = false
             savePending()
             saveWorks()
             return
           }
         } catch(e) {
-          // continue polling
+          consecutiveFails++
+          if (consecutiveFails >= 3) {
+            throw e  // bubble up to retry loop
+          }
+          // transient error, keep polling
         }
       }
-      card.error = '生成超时（2小时）'
-      card.loading = false
-      savePending()
+      throw new Error('生成超时（2小时）')
     }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -1103,20 +2315,91 @@ createApp({
       e.target.value = ''
     }
 
-    function toggleRole(role) {
+    function toggleRole(role, event) {
       if (selectedRole.value?.id === role.id) {
         selectedRole.value = null
         rolePopover.value = null
+        rolePopoverPos.value = null
+        return
+      }
+      selectedRole.value = role
+      const prompt = promptText.value.trim()
+      if (prompt) {
+        // Has prompt text → open director modal immediately
+        rolePopover.value = null
+        rolePopoverPos.value = null
+        openDirectorModal(prompt).catch(() => {
+          if (directorModal.value) {
+            directorModal.value.result = { explanation: '导演思路生成失败，已使用原始提示词', cnPrompt: prompt, enPrompt: prompt }
+            directorModal.value.stage = 4
+          }
+        })
       } else {
-        selectedRole.value = role
+        // No text → just show tooltip hint
         rolePopover.value = role
+        const rect = event.currentTarget.getBoundingClientRect()
+        rolePopoverPos.value = { top: rect.top, centerX: rect.left + rect.width / 2 }
       }
     }
 
-    function rerun(g) {
-      promptText.value = g.prompt
-      selectedModelId.value = g.modelId
-      refs.value = [...(g.refs||[])]
+    async function rerun(g) {
+      // Reset card state and retry in-place
+      g.error = null
+      g.loading = true
+      g.progress = 0
+      g.progressText = '重试中...'
+      g.results = []
+
+      const m = models.value.find(x => x.id === g.modelId) || selectedModel.value
+      if (!m) return
+
+      loadingModels[m.id] = true
+      const MAX_RETRIES = 2
+      let lastErr = null
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 1) {
+            g.error = null
+            g.loading = true
+            g.progress = 0
+            g.progressText = `自动重试 (${attempt}/${MAX_RETRIES})...`
+            await sleep(2000)
+          }
+          const resp = await fetch('/api/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ source: g.source, model: m.apiId || m.id, prompt: g.prompt, params: g.params })
+          })
+          if (!resp.ok) {
+            const err = await resp.json().catch(()=>({detail:'未知错误'}))
+            throw new Error(err.detail || JSON.stringify(err))
+          }
+          const data = await resp.json()
+          if (data.result_urls) {
+            g.results = data.result_urls
+            g.loading = false
+            savePending()
+            saveWorks()
+          } else {
+            const {task_id, source} = data
+            g.taskId = task_id
+            g.progressText = '排队中...'
+            savePending()
+            await pollTask(g, task_id, source)
+          }
+          lastErr = null
+          break
+        } catch(e) {
+          lastErr = e
+          if (attempt < MAX_RETRIES) continue
+        }
+      }
+      if (lastErr) {
+        g.error = lastErr.message
+        g.loading = false
+        savePending()
+      }
+      delete loadingModels[m.id]
     }
 
     function openLightbox(url) { lightboxUrl.value = url }
@@ -1136,6 +2419,54 @@ createApp({
     const LS_CHAT_KEY = 'ai_studio_chat_v1'
 
     const LS_PENDING_KEY = 'ai_studio_pending_v1'
+    const LS_AGENT_KEY = 'ai_studio_agent_v1'
+
+    function saveAgentState() {
+      // Skip when nothing meaningful to save
+      if (!agentSelected.value && agentPhase.value === 0 && !mangaStages.value.length) {
+        localStorage.removeItem(LS_AGENT_KEY); return
+      }
+      const payload = {
+        agentId: agentSelected.value?.id || null,
+        phase:   agentPhase.value,
+        text:    agentText.value,
+        images:  agentImages.value,
+        lastInput: agentLastInput.value,
+        mangaStages: mangaStages.value.map(s => ({
+          ...s,
+          // Reset transient running/loading to a recoverable state
+          status: (s.status === 'running' || s.status === 'loading') ? 'pending' : s.status,
+          streaming: '',  // don't persist mid-stream text
+        })),
+        mangaContext: mangaContext.value,
+        settings: { ...mangaSettings },
+        tasks: agentTasks.value.map(t => ({
+          ...t,
+          status: (t.status === 'loading') ? 'pending' : t.status,
+          progress: t.status === 'done' ? t.progress : 0,
+          progressText: t.status === 'done' ? t.progressText : '等待中',
+        })),
+      }
+      try { localStorage.setItem(LS_AGENT_KEY, JSON.stringify(payload)) } catch(e) {}
+    }
+
+    function loadAgentState() {
+      let saved
+      try { saved = JSON.parse(localStorage.getItem(LS_AGENT_KEY) || 'null') } catch { return }
+      if (!saved || !saved.agentId) return
+      const agent = AGENTS.find(a => a.id === saved.agentId)
+      if (!agent) return
+      activeCategory.value = 'agents'
+      agentSelected.value  = agent
+      agentPhase.value     = saved.phase || 0
+      agentText.value      = saved.text  || ''
+      agentImages.value    = saved.images || []
+      agentLastInput.value = saved.lastInput || null
+      mangaStages.value    = (saved.mangaStages || []).map(s => reactive(s))
+      mangaContext.value   = saved.mangaContext || {}
+      if (saved.settings) Object.assign(mangaSettings, saved.settings)
+      agentTasks.value     = (saved.tasks || []).map(t => reactive(t))
+    }
 
     function savePending() {
       const pending = generations.value
@@ -1191,8 +2522,13 @@ createApp({
       if (val.length > 0) saveWorks()
     }, { deep: true })
 
+    // Persist agent/manga pipeline state across refreshes
+    watch([agentSelected, agentPhase, agentText, agentImages, mangaStages, mangaContext, agentTasks, mangaSettings],
+          () => saveAgentState(), { deep: true })
+
     onMounted(() => {
       loadBalance()
+      loadAgentState()
       // Load works
       try {
         const saved = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
@@ -1247,12 +2583,20 @@ createApp({
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
-      selectedRole, rolePopover, toggleRole, VIDEO_ROLES,
+      selectedRole, rolePopover, rolePopoverPos, rolePopoverStyle, toggleRole, VIDEO_ROLES,
+      directorModal, directorRegen, directorUse,
       ratioOptions, durationOptions, balanceText, historyEl, promptEl,
       showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
       refTypeOptions, inputPlaceholder,
       switchCategory, selectModel, modelById, submit, rerun, addRef, onFileSelected, openLightbox,
       autoResize, renderMd, removeGeneration, removeWork, clearWorks,
+      AGENTS, agentSelected, agentPhase, agentText, agentImages, agentStreaming, agentTasks, agentPlanning,
+      agentMode, agentLastInput,
+      selectAgent, agentReset, agentUploadImg, runAgentPlan, agentTaskRerun,
+      mangaStages, mangaContext, mangaFeedback, isMangaAgent,
+      mangaSettings, mangaSettingsOpen,
+      runMangaPipeline, runMangaStage, confirmMangaStage, regenMangaStage,
+      selectMangaDirection, runMangaProduction, mangaReset,
     }
   }
 }).mount('#app')

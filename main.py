@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import random
 import re
 import time
 from pathlib import Path
@@ -38,7 +39,7 @@ DATA999_ONLY_MODELS = {"grok-4.2", "grok-4.2-image", "doubao-seed-2-0-pro-260215
 LINGKEAI_BASE = "https://php.lingkeai.vip"
 LINGKEAI_SESSION_TOKEN = "e5b7ae5474930aaba74e50025f263888"
 LINGKEAI_USER_ID = "9011036"
-LINGKEAI_S6 = "Chengchen@630"
+LINGKEAI_S6 = "5Mmhj96mnRi@aHxcFFtA-kWRWilQGwVK"
 LINGKEAI_MODEL_IDS = {
     # Grok
     "grok-4.2": 94,
@@ -84,6 +85,7 @@ def http() -> httpx.AsyncClient:
     if _http is None or _http.is_closed:
         _http = httpx.AsyncClient(
             timeout=120,
+            verify=False,  # some upstream APIs have expired certs
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=30),
         )
     return _http
@@ -115,6 +117,74 @@ class GenerateRequest(BaseModel):
     model: str
     prompt: str
     params: Optional[Dict[str, Any]] = {}
+
+
+class DirectorRequest(BaseModel):
+    role_id: int
+    raw_prompt: str
+    role_name: str
+    role_system: str
+
+
+class AgentPlanRequest(BaseModel):
+    agent_type: str
+    text: str
+    images: List[str] = []
+
+
+AGENT_PLAN_PROMPTS: Dict[str, str] = {
+    "ecommerce": (
+        "你是专业电商产品图策划师。用户提供了商品信息，参考图URL已在用户输入中（如有）。\n"
+        "规划6张不同类型的电商图，每张有具体的英文生图提示词：\n"
+        "1. 主图白底：纯白背景专业商品照\n"
+        "2. 主图场景：生活场景中的商品\n"
+        "3. 细节特写：商品局部/材质细节\n"
+        "4. 使用场景：用户正在使用的场景\n"
+        "5. 促销海报：有视觉冲击力的营销图\n"
+        "6. 社媒方图：适合Instagram/小红书的风格图\n\n"
+        "直接输出JSON数组（6个元素），格式：\n"
+        '[{"label":"主图白底","prompt":"professional product photography on pure white background...","model":"wan2.7-image","category":"image","params":{"quality":"standard","size":"1:1"}},...]\n'
+        "prompt全英文60-100字，专业具体。直接输出JSON数组，不要任何其他文字。"
+    ),
+    "general_image": (
+        "你是创意图片策划师。根据用户的参考图和描述，规划6张风格各异但主题一致的系列图。\n"
+        "从不同角度/风格/情绪出发，形成完整视觉叙事：全景氛围、主体突出、细节特写、不同光线、不同情绪、创意角度。\n\n"
+        "直接输出JSON数组（6个元素）：\n"
+        '[{"label":"全景氛围","prompt":"wide cinematic shot...","model":"wan2.7-image","category":"image","params":{"quality":"standard","size":"16:9"}},...]\n'
+        "prompt全英文60-100字，风格差异明显。直接输出JSON数组，不要其他文字。"
+    ),
+    "manga_s2": (
+        "你是漫剧导演。根据用户提供的参考图片描述和主题，创作一个5幕漫剧短片脚本。\n"
+        "叙事弧：开场→发展→冲突→高潮→结局。镜头语言丰富，情感递进有张力。\n\n"
+        "直接输出JSON数组（5个元素）：\n"
+        '[{"label":"第1幕 开场","prompt":"Cinematic wide establishing shot, golden hour light...slow dolly push-in, melancholic atmosphere, 4K cinematic","model":"veo3.1-lite","category":"video","params":{"enhance_prompt":true,"quality":"4k"}},...]\n'
+        "prompt全英文60-100字，镜头感强。直接输出JSON数组，不要其他文字。"
+    ),
+    "manga_plot": (
+        "你是漫剧导演。将用户提供的剧情文案改编为5幕漫剧视频脚本。\n"
+        "忠于情感主线，文字转化为具体画面描述。5幕有完整叙事结构，每幕有电影感。\n\n"
+        "直接输出JSON数组（5个元素）：\n"
+        '[{"label":"第1幕 开场","prompt":"Cinematic opening...","model":"veo3.1-lite","category":"video","params":{"enhance_prompt":true,"quality":"4k"}},...]\n'
+        "prompt全英文60-100字。直接输出JSON数组，不要其他文字。"
+    ),
+    "manga_narration": (
+        "你是抖音解说视频导演。将用户内容做成3-5幕解说风格短视频，每幕包含：\n"
+        "1. 英文画面提示词（用于生成视频）\n"
+        "2. 中文解说文字（20字内，口语化，有悬念钩子）\n"
+        "节奏快、视觉冲击强。\n\n"
+        "直接输出JSON数组（3-5个元素）：\n"
+        '[{"label":"第1幕 钩子","prompt":"dramatic extreme close-up...","narration":"你知道吗，这个秘密改变了一切...","model":"veo3.1-lite","category":"video","params":{"enhance_prompt":true,"quality":"4k"}},...]\n'
+        "直接输出JSON数组，不要其他文字。"
+    ),
+    "multi_frame": (
+        "你是视频剪辑师。用户上传了多张图片，你需要为每张图片生成一个独立视频片段提示词，串联成连贯长视频。\n"
+        "分析整体风格和氛围，每段镜头语言有变化（推/拉/摇/移），前后连贯统一。\n"
+        "输出的JSON数组元素数量必须与用户上传图片数量完全相同。\n\n"
+        "直接输出JSON数组：\n"
+        '[{"label":"片段1","prompt":"slow cinematic push-in...","model":"veo3.1-lite","category":"video","params":{"enhance_prompt":true,"quality":"4k"}},...]\n'
+        "prompt全英文60-100字，镜头动作明确。直接输出JSON数组，不要其他文字。"
+    ),
+}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -225,6 +295,343 @@ async def chat_sync(req: ChatRequest):
     return {"text": full}
 
 
+_DIRECTOR_SHOTS = [
+    "极端特写", "低角度仰拍", "鸟瞰俯拍", "荷兰角倾斜构图", "跟拍运动镜头",
+    "隐藏摄影机偷拍感", "长镜头一镜到底", "分裂画面", "主观第一人称视角", "旋转360度环绕",
+]
+_DIRECTOR_LIGHT = [
+    "黄金时刻逆光", "蓝调时分冷光", "霓虹灯反射湿地", "单一硬光强阴影",
+    "烛光温暖摇曳", "日光灯冷白刺眼", "月光冷蓝穿云", "火光跳动暖橙",
+    "暗房红灯", "窗格光影斑驳",
+]
+_DIRECTOR_MOOD = [
+    "压抑到爆发", "平静下暗涌危机", "荒诞幽默", "原始本能冲动",
+    "孤独但不悲伤", "狂喜接近疯狂", "怀旧但已不可回", "冷酷客观无情感",
+    "神秘仪式感", "疲惫但仍燃烧",
+]
+_DIRECTOR_TEXTURE = [
+    "胶片颗粒感强", "过曝高对比", "去饱和近单色", "水彩晕染柔边",
+    "监控画质粗糙", "8mm家庭录像", "数字故障glitch", "超现实油画质感",
+    "高速摄影极慢动作", "延时摄影快进",
+]
+_DIRECTOR_STRUCTURE = [
+    "从结局开始倒叙", "聚焦一个无关紧要的细节来讲整件事",
+    "不出现主体，只拍反应和环境", "用隐喻替代直接描述，完全不提字面意思",
+    "两个不相关场景平行剪辑制造对比", "只描述声音和光，不描述人",
+    "从微观局部慢慢拉远到宏观", "时间静止，只有一个元素在动",
+]
+
+
+@app.post("/api/director")
+async def director_endpoint(req: DirectorRequest):
+    """Director modal — embed all instructions in the user message to bypass lingkeai's [System:] ignore bug."""
+    # Pick random creative constraints — different every call
+    shot = random.choice(_DIRECTOR_SHOTS)
+    light = random.choice(_DIRECTOR_LIGHT)
+    mood = random.choice(_DIRECTOR_MOOD)
+    texture = random.choice(_DIRECTOR_TEXTURE)
+    structure = random.choice(_DIRECTOR_STRUCTURE)
+    seed = random.randint(10000, 99999)
+
+    combined = (
+        f"你现在是【{req.role_name}】这个角色。{req.role_system}\n\n"
+        f"用户的原始想法：「{req.raw_prompt}」\n\n"
+        f"本次随机创作种子 #{seed}，你必须从以下随机维度出发来诠释这个想法，"
+        f"这些维度每次都不同，你的输出必须完全反映它们：\n"
+        f"• 镜头语言：{shot}\n"
+        f"• 光线氛围：{light}\n"
+        f"• 情绪基调：{mood}\n"
+        f"• 画面质感：{texture}\n"
+        f"• 叙事结构：{structure}\n\n"
+        f"以上是强制约束，不能忽略。在这些约束框架内，用【{req.role_name}】独特的导演个性和美学偏好来创作。\n"
+        f"禁止使用任何通用模板句式（如'在X的光线下，Y正在做Z'这类格式）。\n\n"
+        "直接输出纯JSON，不要任何markdown、代码块或解释：\n"
+        '{"explanation":"以你角色的口吻，说出你这次的创作切入点和为什么选这个角度，2-3句，要有个性",'
+        '"cnPrompt":"中文视频提示词，必须融入以上所有随机维度，60-100字，句式要多变",'
+        '"enPrompt":"English video prompt that reflects all the above random dimensions and your directorial voice, 60-100 words, varied sentence structure"}'
+    )
+    group_id = f"group_{LINGKEAI_USER_ID}_{int(time.time() * 1000)}"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "token": _encode_lingkeai_token(),
+    }
+    body = {
+        "模型id": 38,  # claude-sonnet-4-6 — follows embedded instructions reliably
+        "用户消息": combined,
+        "渠道分组策略": "成功率优先",
+        "对话组id": group_id,
+        "生成参数": {"web_search": False, "enable_thinking": False, "max_tokens": 2000},
+    }
+
+    async def _stream():
+        got_text = False
+        try:
+            async with http().stream("POST", f"{LINGKEAI_BASE}/moxing/tongyirukouchat",
+                                      headers=headers, json=body) as r:
+                if r.status_code != 200:
+                    yield f"data: {json.dumps({'error': f'HTTP {r.status_code}'})}\n\n"
+                    return
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    s = line[5:].strip()
+                    try:
+                        d = json.loads(s)
+                        if d.get("type") == "error":
+                            yield f"data: {json.dumps({'error': d.get('message', 'lingkeai error')})}\n\n"
+                            return
+                        text = ""
+                        if d.get("type") == "content" and d.get("content"):
+                            text = d["content"]
+                        elif d.get("choices"):
+                            text = d["choices"][0].get("delta", {}).get("content", "")
+                        if text:
+                            got_text = True
+                            yield f"data: {json.dumps({'text': text})}\n\n"
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
+        if not got_text:
+            yield f"data: {json.dumps({'error': 'empty response'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class MangaStageRequest(BaseModel):
+    stage: str
+    context: Dict[str, Any] = {}
+    images: List[str] = []
+    feedback: str = ""
+
+
+MANGA_STAGE_PROMPTS: Dict[str, str] = {
+    "intent": (
+        "你是AI漫剧S2.0的创作助手。深度分析用户的创意描述，准确理解创作意图。\n\n"
+        "直接返回JSON（不要markdown代码块）：\n"
+        '{"intent_type":"narrative（从零创作故事）或adapt（改编已有素材）",'
+        '"core_themes":["主题1","主题2"],"main_characters":["角色描述"],'
+        '"setting":"主要场景和环境","visual_style":"推荐画面风格（如：赛博朋克/温馨日常/古风武侠）",'
+        '"summary":"3句话总结这个创意的核心魅力和故事潜力，口吻专业有激情"}'
+    ),
+    "directions": (
+        "你是AI漫剧S2.0的创意总监。基于意图分析，构思3个风格鲜明且完全不同的创意方向。\n\n"
+        "直接返回JSON数组（不要markdown代码块）：\n"
+        '[{"id":1,"title":"方向名称（4-8字，有感染力）","style_tag":"情感基调标签（如：悬疑反转/温情治愈/热血励志）",'
+        '"synopsis":"故事走向（3-4句，有起伏有悬念）","highlight":"最大亮点（1句话）",'
+        '"visual_keyword":"核心视觉关键词（如：霓虹夜雨/暖黄复古/冷蓝科技）"},'
+        '{"id":2,...},{"id":3,...}]\n'
+        "三个方向必须有明显差异，覆盖不同情感基调。"
+    ),
+    "storyboard": (
+        "你是AI漫剧S2.0的首席分镜师。基于选定的创意方向，创作5帧分镜脚本。\n\n"
+        "⚠️ 关键一致性要求（每帧 image_prompt 必须 100% 包含）：\n"
+        "1. **角色锚定**：每帧用完全相同的角色描述（外观/颜色/品种/服装/特征），不能改一个字\n"
+        "2. **画风锚定**：基于意图分析的 visual_style 和方向的 visual_keyword，每帧画风描述完全相同\n"
+        "3. **色调锚定**：色温/色调系统每帧统一（如：暖橙阳光 / 冷蓝霓虹 / 复古黄绿）\n\n"
+        "示例（橘猫故事）：每帧 image_prompt 都要这样开头：\n"
+        "「一只橙色短毛橘猫，圆绿眼，白色胸口和爪尖，温馨日式手绘插画风，暖橙阳光色调」\n"
+        "然后再描述这一帧的具体场景/动作/构图。\n\n"
+        "直接返回JSON数组（不要markdown代码块），5帧：\n"
+        '[{"shot":1,"title":"分镜标题（5字内）","scene":"场景描述",'
+        '"characters":["出境角色"],"action":"主要动作和画面变化",'
+        '"dialogue":"台词或旁白（可为空字符串）","camera":"特写/中景/远景/全景",'
+        '"duration":5,"image_prompt":"必须以【完全相同的角色+画风+色调】开头，再加该帧场景动作，100-130字",'
+        '"video_prompt":"English video prompt（camera movement + scene dynamics + atmosphere，40-60 words）"}]\n'
+        "分镜要有完整故事弧：开篇铺垫→发展→冲突→高潮→结尾。"
+    ),
+    "plot_storyboard": (
+        "你是AI漫剧导演。将用户提供的剧情文案转化为5帧分镜脚本，保持情感主线和故事张力。\n\n"
+        "⚠️ 关键一致性要求（每帧 image_prompt 必须 100% 包含完全相同的开头）：\n"
+        "1. **角色锚定**：每帧用完全相同的角色描述（外观/服装/特征），不能改一个字\n"
+        "2. **画风锚定**：每帧画风描述完全相同（如：电影感写实/温馨手绘插画/赛博朋克）\n"
+        "3. **色调锚定**：色温色调每帧统一\n\n"
+        "image_prompt 示例开头：「[完全相同的角色描述]，[相同画风]，[相同色调]，」+ 该帧具体场景动作\n\n"
+        "直接返回JSON数组（不要markdown代码块），5帧：\n"
+        '[{"shot":1,"title":"分镜标题（5字内）","scene":"场景描述",'
+        '"characters":["出境角色"],"action":"主要动作",'
+        '"dialogue":"台词或旁白（可为空字符串）","camera":"特写/中景/远景/全景",'
+        '"duration":5,"image_prompt":"必须以【完全相同的角色+画风+色调】开头，再加该帧场景，100-130字",'
+        '"video_prompt":"English video prompt（40-60 words）"}]\n'
+        "忠于原文情感，镜头语言丰富，有电影感。"
+    ),
+    "narration_storyboard": (
+        "你是抖音解说视频导演。将用户内容拆解为5个解说视频片段，每段配合具体的视觉画面。\n\n"
+        "⚠️ 关键一致性要求（每帧 image_prompt 必须 100% 包含相同的开头）：\n"
+        "1. **风格锚定**：每帧使用完全相同的视觉风格描述（如：抖音爆款/赛博霓虹/复古胶片）\n"
+        "2. **色调锚定**：色温色调每帧统一\n\n"
+        "image_prompt 示例开头：「[相同视觉风格]，[相同色调]，」+ 该帧场景\n\n"
+        "直接返回JSON数组（不要markdown代码块），5帧：\n"
+        '[{"shot":1,"title":"片段标题（5字内）","scene":"视觉场景描述",'
+        '"narration":"解说文字（15-25字，口语化有钩子）","action":"画面主要动作",'
+        '"camera":"特写/中景/远景","duration":5,'
+        '"image_prompt":"必须以【相同的风格+色调】开头，再加该帧场景，80-110字",'
+        '"video_prompt":"English video prompt（40-60 words）"}]\n'
+        "解说节奏快、有悬念、视觉冲击强，契合抖音调性。"
+    ),
+}
+
+
+@app.post("/api/manga/stage")
+async def manga_stage_endpoint(req: MangaStageRequest):
+    """Manga S2.0 pipeline — per-stage AI generation with streaming."""
+    stage = req.stage
+    if stage not in MANGA_STAGE_PROMPTS:
+        raise HTTPException(400, f"Unknown manga stage: {stage}")
+
+    sys_instr = MANGA_STAGE_PROMPTS[stage]
+    ctx = req.context
+    parts: List[str] = []
+
+    if req.feedback:
+        parts.append(f"【修改意见】{req.feedback}\n")
+
+    if stage == "intent":
+        parts.append(f"用户创意描述：{ctx.get('text', '')}")
+        if req.images:
+            parts.append(f"上传了{len(req.images)}张参考图，URL：{' | '.join(req.images[:3])}")
+    elif stage == "directions":
+        parts.append(f"原始创意：{ctx.get('text', '')}")
+        parts.append(f"意图分析结果：{json.dumps(ctx.get('intent_result', {}), ensure_ascii=False)}")
+    elif stage in ("storyboard", "plot_storyboard", "narration_storyboard"):
+        parts.append(f"原始创意/内容：{ctx.get('text', '')}")
+        if ctx.get("selected_direction"):
+            parts.append(f"选定创意方向：{json.dumps(ctx['selected_direction'], ensure_ascii=False)}")
+        if req.images:
+            parts.append(f"参考图数量：{len(req.images)}张")
+
+    combined = f"{sys_instr}\n\n[用户输入]\n" + "\n".join(parts)
+
+    group_id = f"group_{LINGKEAI_USER_ID}_{int(time.time() * 1000)}"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "token": _encode_lingkeai_token(),
+    }
+    # Storyboard stages need more tokens — 5-7 shots × ~400 chars each + JSON overhead
+    storyboard_stages = ("storyboard", "plot_storyboard", "narration_storyboard")
+    max_tok = 8000 if stage in storyboard_stages else 4000
+    body = {
+        "模型id": 38,
+        "用户消息": combined,
+        "渠道分组策略": "成功率优先",
+        "对话组id": group_id,
+        "生成参数": {"web_search": False, "enable_thinking": False, "max_tokens": max_tok},
+    }
+
+    async def _stream():
+        got_text = False
+        try:
+            async with http().stream("POST", f"{LINGKEAI_BASE}/moxing/tongyirukouchat",
+                                      headers=headers, json=body) as r:
+                if r.status_code != 200:
+                    yield f"data: {json.dumps({'error': f'HTTP {r.status_code}'})}\n\n"
+                    return
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    s = line[5:].strip()
+                    try:
+                        d = json.loads(s)
+                        if d.get("type") == "error":
+                            yield f"data: {json.dumps({'error': d.get('message', 'error')})}\n\n"
+                            return
+                        text = ""
+                        if d.get("type") == "content" and d.get("content"):
+                            text = d["content"]
+                        elif d.get("choices"):
+                            text = d["choices"][0].get("delta", {}).get("content", "")
+                        if text:
+                            got_text = True
+                            yield f"data: {json.dumps({'text': text})}\n\n"
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
+        if not got_text:
+            yield f"data: {json.dumps({'error': 'empty response'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/agent/plan")
+async def agent_plan_endpoint(req: AgentPlanRequest):
+    """Agent planning — Claude generates a JSON task list for the given agent type."""
+    prompt_template = AGENT_PLAN_PROMPTS.get(req.agent_type)
+    if not prompt_template:
+        raise HTTPException(400, f"Unknown agent type: {req.agent_type}")
+
+    img_section = ""
+    if req.images:
+        img_section = f"\n用户上传了{len(req.images)}张参考图片：{' | '.join(req.images)}\n"
+
+    combined = f"{prompt_template}{img_section}\n用户输入：{req.text}"
+
+    group_id = f"group_{LINGKEAI_USER_ID}_{int(time.time() * 1000)}"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "token": _encode_lingkeai_token(),
+    }
+    body = {
+        "模型id": 38,
+        "用户消息": combined,
+        "渠道分组策略": "成功率优先",
+        "对话组id": group_id,
+        "生成参数": {"web_search": False, "enable_thinking": False, "max_tokens": 4000},
+    }
+
+    async def _stream():
+        got_text = False
+        try:
+            async with http().stream("POST", f"{LINGKEAI_BASE}/moxing/tongyirukouchat",
+                                      headers=headers, json=body) as r:
+                if r.status_code != 200:
+                    yield f"data: {json.dumps({'error': f'HTTP {r.status_code}'})}\n\n"
+                    return
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    s = line[5:].strip()
+                    try:
+                        d = json.loads(s)
+                        if d.get("type") == "error":
+                            yield f"data: {json.dumps({'error': d.get('message', 'error')})}\n\n"
+                            return
+                        text = ""
+                        if d.get("type") == "content" and d.get("content"):
+                            text = d["content"]
+                        elif d.get("choices"):
+                            text = d["choices"][0].get("delta", {}).get("content", "")
+                        if text:
+                            got_text = True
+                            yield f"data: {json.dumps({'text': text})}\n\n"
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
+        if not got_text:
+            yield f"data: {json.dumps({'error': 'empty response'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/generate")
 async def generate(req: GenerateRequest):
     params = dict(req.params or {})
@@ -237,6 +644,7 @@ async def generate(req: GenerateRequest):
             timeout=300,
         )
         d = r.json()
+        print(f"[deepwl] status={r.status_code} model={req.model} resp_keys={list(d.keys())} error={d.get('error')} content_preview={str(d.get('choices',[{}])[0].get('message',{}).get('content',''))[:200]}", flush=True)
         if d.get("error"):
             raise HTTPException(400, detail=d["error"].get("message", str(d["error"])))
         content = d.get("choices", [{}])[0].get("message", {}).get("content", "")
