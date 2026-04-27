@@ -1152,10 +1152,15 @@ async def start_scheduler():
     )
     _scheduler.start()
     print("[scheduler] started — IDEXX Neo scrape every hour 9am–10pm PT")
-    # Run once immediately on startup if within clinic hours
-    now_h = datetime.now().hour
-    if 9 <= now_h <= 22:
-        asyncio.create_task(scrape_neo_schedule())
+    # Always run once on startup to populate cache immediately
+    asyncio.create_task(scrape_neo_schedule())
+
+
+@app.post("/api/neo-schedule/refresh")
+async def refresh_neo_schedule():
+    """Manually trigger a schedule scrape."""
+    asyncio.create_task(scrape_neo_schedule())
+    return {"ok": True, "message": "scrape triggered"}
 
 
 if __name__ == "__main__":
