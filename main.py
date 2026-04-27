@@ -1022,6 +1022,7 @@ async def proxy_download(url: str, filename: str = "download"):
 
 # ── IDEXX Neo Schedule Cache ──────────────────────────────────────────────────
 _neo_schedule: dict = {}  # { "2026-04-27": [...appointments] }
+_neo_debug: dict = {}     # latest raw event + extra responses for inspection
 
 class NeoAppointment(BaseModel):
     time: str
@@ -1194,10 +1195,7 @@ async def scrape_neo_schedule():
                 if ev.get("is_block"):
                     continue
                 if i == 0:
-                    # debug: show all keys + full first event so we can spot useful fields
-                    print(f"[neo] sample event keys: {list(ev.keys())}")
-                    import json as _json
-                    print(f"[neo] sample event full: {_json.dumps(ev, default=str)[:1500]}")
+                    _neo_debug["sample_event"] = ev
                 title = ev.get("title", "")
                 parts = title.split(";", 1)
                 patient = parts[0].strip()
@@ -1243,6 +1241,41 @@ async def scrape_neo_schedule():
                     "patient_id": str(pid),
                 })
 
+            # DEBUG: probe popup-like endpoints with first event's id/patient_id
+            if appts and not _neo_debug.get("probed"):
+                first_ev = events[0] if events else {}
+                eid = str(first_ev.get("id", ""))
+                pid = str(first_ev.get("patient_id") or first_ev.get("patientId") or "")
+                probe_urls = [
+                    f"{NEO_BASE}/appointments/getPopupData?id={eid}",
+                    f"{NEO_BASE}/appointments/getEventData?id={eid}",
+                    f"{NEO_BASE}/appointments/getAppointmentData?id={eid}",
+                    f"{NEO_BASE}/appointments/popup?id={eid}",
+                    f"{NEO_BASE}/appointments/getPopupHtml?id={eid}",
+                    f"{NEO_BASE}/appointments/getPopup?id={eid}",
+                    f"{NEO_BASE}/appointments/details/{eid}",
+                    f"{NEO_BASE}/patients/getPatientPopup?id={pid}",
+                    f"{NEO_BASE}/patients/getPopup?id={pid}",
+                    f"{NEO_BASE}/patients/popup?id={pid}",
+                    f"{NEO_BASE}/patients/summary?id={pid}",
+                    f"{NEO_BASE}/patients/getSummary?id={pid}",
+                    f"{NEO_BASE}/patients/{pid}/summary",
+                    f"{NEO_BASE}/patients/getPatient?id={pid}",
+                    f"{NEO_BASE}/patients/view/{pid}",
+                ]
+                probe_results = []
+                for url in probe_urls:
+                    try:
+                        rr = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+                        snippet = rr.text[:300] if rr.status_code == 200 else ""
+                        probe_results.append({"url": url, "status": rr.status_code,
+                                              "ct": rr.headers.get("content-type",""),
+                                              "snippet": snippet})
+                    except Exception as e:
+                        probe_results.append({"url": url, "error": str(e)})
+                _neo_debug["probes"] = probe_results
+                _neo_debug["probed"] = True
+
             appts.sort(key=lambda a: a["time"])
             _neo_schedule[date_str] = appts
             print(f"[neo] cached {len(appts)} appointments for {date_str}")
@@ -1268,8 +1301,14 @@ async def start_scheduler():
 @app.post("/api/neo-schedule/refresh")
 async def refresh_neo_schedule():
     """Manually trigger a schedule scrape."""
+    _neo_debug.pop("probed", None)  # allow re-probe
     asyncio.create_task(scrape_neo_schedule())
     return {"ok": True, "message": "scrape triggered"}
+
+@app.get("/api/neo-debug")
+async def neo_debug():
+    """Inspect last raw event + endpoint probe results."""
+    return _neo_debug
 
 
 if __name__ == "__main__":
