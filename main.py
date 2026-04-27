@@ -1061,89 +1061,74 @@ async def balance():
 
 # ── IDEXX Neo Scraper ─────────────────────────────────────────────────────────
 async def scrape_neo_schedule():
-    """Login to IDEXX Neo and scrape today's schedule into the cache."""
+    """Login to IDEXX Neo and fetch today's schedule via the calendar API."""
     if not NEO_USER or not NEO_PASS:
-        print("[neo] NEO_USER/NEO_PASS not set, skipping scrape")
+        print("[neo] NEO_USER/NEO_PASS not set, skipping")
         return
     date_str = datetime.now().strftime("%Y-%m-%d")
-    print(f"[neo] scraping schedule for {date_str}")
+    print(f"[neo] scraping {date_str}")
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            # 1. GET login page → grab CSRF token from cookie
-            r = await client.get(f"{NEO_BASE}/login/")
-            xsrf = client.cookies.get("XSRF-TOKEN", "")
-
-            # 2. GET login page — extract all hidden tokens
+            # 1. GET login page — extract form tokens
             login_page = await client.get(f"{NEO_BASE}/login/")
             lsoup = BeautifulSoup(login_page.text, "lxml")
-            csrf_token  = (lsoup.find("input", {"name": "csrf_neo_token"}) or {}).get("value", "")
-            se_token    = (lsoup.find("input", {"name": "se_login_request"}) or {}).get("value", "")
-            print(f"[neo] login page status={login_page.status_code} csrf={'ok' if csrf_token else 'missing'}")
+            csrf_token = (lsoup.find("input", {"name": "csrf_neo_token"}) or {}).get("value", "")
+            se_token   = (lsoup.find("input", {"name": "se_login_request"}) or {}).get("value", "")
+            print(f"[neo] login page csrf={'ok' if csrf_token else 'missing'}")
 
-            # 3. POST login to /login (no trailing slash)
+            # 2. POST login
             login = await client.post(f"{NEO_BASE}/login", data={
-                "company_id":       NEO_COMPANY,
-                "username":         NEO_USER,
-                "password":         NEO_PASS,
-                "submitted":        "TRUE",
-                "csrf_neo_token":   csrf_token,
-                "se_login_request": se_token,
+                "company_id": NEO_COMPANY, "username": NEO_USER,
+                "password": NEO_PASS, "submitted": "TRUE",
+                "csrf_neo_token": csrf_token, "se_login_request": se_token,
             }, headers={"Referer": f"{NEO_BASE}/login/"})
-            print(f"[neo] login POST status={login.status_code} url={str(login.url)[:80]}")
-
+            print(f"[neo] login → {str(login.url)[:60]}")
             if "/login" in str(login.url):
-                print("[neo] still on login page — auth failed")
-                return
+                print("[neo] auth failed"); return
 
-            # 4. GET schedule page
-            sched = await client.get(f"{NEO_BASE}/schedule?date={date_str}")
-            print(f"[neo] schedule status={sched.status_code} url={str(sched.url)[:60]} len={len(sched.text)}")
+            # 3. Call calendar JSON API directly
+            api_url = (f"{NEO_BASE}/appointments/getCalendarEventData"
+                       f"?start={date_str}T00%3A00%3A00&end={date_str}T23%3A59%3A59")
+            r = await client.get(api_url, headers={"X-Requested-With": "XMLHttpRequest"})
+            data = r.json()
+            events = data.get("events", [])
+            print(f"[neo] API returned {len(events)} events")
 
-            # 4. Parse appointments from HTML
-            soup = BeautifulSoup(sched.text, "lxml")
+            # 4. Build resource id → room name map
+            room_map = {str(res["id"]): res["title"] for res in data.get("resources", [])}
+
+            # 5. Parse events into appointments
             appts = []
-            for link in soup.select("a[href]"):
-                texts = [t.strip() for t in link.stripped_strings if t.strip()]
-                if not texts:
+            for ev in events:
+                if ev.get("is_block"):
                     continue
-                # Find time pattern
-                time_val = next((t for t in texts if re.match(r"\d{1,2}:\d{2}(am|pm)", t, re.I)), None)
-                if not time_val:
-                    continue
-                patient  = next((t for t in texts if ";" in t), "")
-                room     = next((t for t in texts if re.search(r"Examination room|Ultrasound|Tech Appoint", t, re.I)), "")
-                provider = next((t for t in texts if re.search(r"DVM|Dr\.", t)), "")
-                appt_type= next((t for t in texts if re.search(r"Exam|Surgery|Vaccine|Tech Visit|Recheck|New Patient|Vaccines Only", t, re.I)), "")
-                # Notes: first text that is not any of the above and not the time/patient
-                skip = {time_val, patient, room, provider, appt_type}
-                noise = re.compile(r"Click|Arrived|Edit|Not Arrived|Emergency", re.I)
-                notes = next((t for t in texts if t not in skip and not noise.search(t) and len(t) > 5 and t != patient.split(";")[0].strip()), "")
-                # Split patient/owner
-                owner = ""
-                if ";" in patient:
-                    parts = patient.split(";", 1)
-                    patient = parts[0].strip()
-                    owner   = parts[1].strip() if len(parts) > 1 else ""
-                if patient:
-                    appts.append({
-                        "time": time_val, "patient": patient, "owner": owner,
-                        "room": room, "type": appt_type, "notes": notes[:120],
-                        "provider": provider,
-                    })
+                title = ev.get("title", "")
+                parts = title.split(";", 1)
+                patient = parts[0].strip()
+                owner   = parts[1].strip() if len(parts) > 1 else ""
+                start   = ev.get("start", "")
+                try:
+                    from datetime import datetime as _dt
+                    t = _dt.strptime(start, "%Y-%m-%d %H:%M:%S")
+                    time_fmt = t.strftime("%-I:%M%p").lower()
+                except Exception:
+                    time_fmt = start[11:16]
+                notes = (ev.get("reason") or ev.get("popup_title_text") or "")[:120]
+                appts.append({
+                    "time":     time_fmt,
+                    "patient":  patient,
+                    "owner":    owner,
+                    "room":     room_map.get(str(ev.get("resourceId", "")), ""),
+                    "type":     ev.get("type_description", ""),
+                    "notes":    notes,
+                    "provider": ev.get("provider", ""),
+                })
 
-            # Deduplicate by (time, patient)
-            seen = set()
-            unique = []
-            for a in appts:
-                key = (a["time"], a["patient"])
-                if key not in seen:
-                    seen.add(key)
-                    unique.append(a)
-
-            _neo_schedule[date_str] = unique
-            print(f"[neo] cached {len(unique)} appointments for {date_str}")
+            appts.sort(key=lambda a: a["time"])
+            _neo_schedule[date_str] = appts
+            print(f"[neo] cached {len(appts)} appointments for {date_str}")
     except Exception as e:
-        print(f"[neo] scrape error: {e}")
+        print(f"[neo] error: {e}")
 
 
 # ── Scheduler: 9am–10pm every hour ────────────────────────────────────────────
