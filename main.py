@@ -1034,6 +1034,7 @@ class NeoAppointment(BaseModel):
     species: str = ""
     breed: str = ""
     sex: str = ""
+    age: str = ""
     weight: str = ""
     patient_id: str = ""
 
@@ -1211,6 +1212,21 @@ async def scrape_neo_schedule():
                 notes = (ev.get("reason") or ev.get("popup_title_text") or "")[:120]
                 pid = (ev.get("patient_id") or ev.get("patientId")
                        or ev.get("patient") or ev.get("pet_id") or "")
+                # Scan all string fields for the popup summary line:
+                # "Feline|Shorthair,British|F/S|11 yrs 8 mos|5.92 kg"
+                species = breed = sex = age = weight = ""
+                for v in ev.values():
+                    if not isinstance(v, str) or v.count("|") < 3:
+                        continue
+                    bits = [b.strip() for b in v.split("|")]
+                    # Heuristic: find one where a bit ends with "kg" or "lb"
+                    if not any(b.lower().endswith(("kg", "lb", "lbs")) for b in bits):
+                        continue
+                    if len(bits) >= 5:
+                        species, breed, sex, age, weight = bits[:5]
+                    elif len(bits) == 4:
+                        species, breed, sex, weight = bits
+                    break
                 appts.append({
                     "time":       time_fmt,
                     "patient":    patient,
@@ -1219,24 +1235,13 @@ async def scrape_neo_schedule():
                     "type":       ev.get("type_description", ""),
                     "notes":      notes,
                     "provider":   ev.get("provider", ""),
-                    "species":    "",
-                    "breed":      "",
-                    "sex":        "",
-                    "weight":     "",
+                    "species":    species,
+                    "breed":      breed,
+                    "sex":        sex,
+                    "age":        age,
+                    "weight":     weight,
                     "patient_id": str(pid),
                 })
-
-            # 6. Enrich each appointment with patient details (species/breed/sex/weight)
-            seen: dict = {}
-            for a in appts:
-                pid = a["patient_id"]
-                if not pid:
-                    continue
-                if pid in seen:
-                    a.update(seen[pid]); continue
-                detail = await _fetch_patient_detail(client, pid)
-                seen[pid] = detail
-                a.update(detail)
 
             appts.sort(key=lambda a: a["time"])
             _neo_schedule[date_str] = appts
