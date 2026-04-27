@@ -1031,6 +1031,11 @@ class NeoAppointment(BaseModel):
     type: str
     notes: str
     provider: str = ""
+    species: str = ""
+    breed: str = ""
+    sex: str = ""
+    weight: str = ""
+    patient_id: str = ""
 
 class NeoScheduleData(BaseModel):
     date: str
@@ -1060,6 +1065,67 @@ async def balance():
 
 
 # ── IDEXX Neo Scraper ─────────────────────────────────────────────────────────
+async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
+    """Best-effort fetch of patient species/breed/sex/weight. Returns {} on failure."""
+    out = {"species": "", "breed": "", "sex": "", "weight": ""}
+    # Try a few likely IDEXX Neo endpoints. First successful JSON wins.
+    candidates = [
+        f"{NEO_BASE}/patients/getPatientData?id={pid}",
+        f"{NEO_BASE}/patients/getPatient?id={pid}",
+        f"{NEO_BASE}/patients/getDetails?id={pid}",
+        f"{NEO_BASE}/patients/view/{pid}",
+    ]
+    for url in candidates:
+        try:
+            r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+            if r.status_code != 200:
+                continue
+            ct = r.headers.get("content-type", "")
+            if "json" in ct:
+                d = r.json()
+                # Some endpoints wrap data in {"patient": {...}} or {"data": {...}}
+                if isinstance(d, dict):
+                    for key in ("patient", "data", "result"):
+                        if isinstance(d.get(key), dict):
+                            d = d[key]; break
+                # First-time discovery log
+                if not getattr(_fetch_patient_detail, "_logged", False):
+                    print(f"[neo] patient detail keys ({url.split('?')[0].split('/')[-1]}): "
+                          f"{list(d.keys()) if isinstance(d, dict) else type(d).__name__}")
+                    _fetch_patient_detail._logged = True
+                if isinstance(d, dict):
+                    out["species"] = str(d.get("species") or d.get("species_name") or
+                                          d.get("Species") or "")
+                    out["breed"]   = str(d.get("breed") or d.get("breed_name") or
+                                          d.get("Breed") or "")
+                    out["sex"]     = str(d.get("sex") or d.get("gender") or
+                                          d.get("Sex") or "")
+                    w = (d.get("weight") or d.get("current_weight") or
+                         d.get("Weight") or "")
+                    unit = d.get("weight_unit") or d.get("weight_units") or ""
+                    out["weight"] = (f"{w} {unit}".strip() if w else "")
+                return out
+            elif "html" in ct:
+                # HTML fallback: scrape labelled fields
+                soup = BeautifulSoup(r.text, "lxml")
+                txt = soup.get_text(" ", strip=True)
+                import re
+                def grab(label):
+                    m = re.search(rf"{label}\s*[:：]\s*([^\n|•]+?)(?:\s{{2,}}|$|[|•])",
+                                  txt, re.I)
+                    return m.group(1).strip() if m else ""
+                out["species"] = grab("Species")
+                out["breed"]   = grab("Breed")
+                out["sex"]     = grab("Sex") or grab("Gender")
+                out["weight"]  = grab("Weight")
+                if any(out.values()):
+                    return out
+        except Exception as e:
+            print(f"[neo] patient {pid} via {url.split('/')[-1]} failed: {e}")
+            continue
+    return out
+
+
 async def scrape_neo_schedule():
     """Login to IDEXX Neo and fetch today's schedule via the calendar API."""
     if not NEO_USER or not NEO_PASS:
@@ -1099,9 +1165,12 @@ async def scrape_neo_schedule():
 
             # 5. Parse events into appointments
             appts = []
-            for ev in events:
+            for i, ev in enumerate(events):
                 if ev.get("is_block"):
                     continue
+                if i == 0:
+                    # debug: show all keys of first event so we can spot patient_id-like fields
+                    print(f"[neo] sample event keys: {list(ev.keys())}")
                 title = ev.get("title", "")
                 parts = title.split(";", 1)
                 patient = parts[0].strip()
@@ -1114,15 +1183,34 @@ async def scrape_neo_schedule():
                 except Exception:
                     time_fmt = start[11:16]
                 notes = (ev.get("reason") or ev.get("popup_title_text") or "")[:120]
+                pid = (ev.get("patient_id") or ev.get("patientId")
+                       or ev.get("patient") or ev.get("pet_id") or "")
                 appts.append({
-                    "time":     time_fmt,
-                    "patient":  patient,
-                    "owner":    owner,
-                    "room":     room_map.get(str(ev.get("resourceId", "")), ""),
-                    "type":     ev.get("type_description", ""),
-                    "notes":    notes,
-                    "provider": ev.get("provider", ""),
+                    "time":       time_fmt,
+                    "patient":    patient,
+                    "owner":      owner,
+                    "room":       room_map.get(str(ev.get("resourceId", "")), ""),
+                    "type":       ev.get("type_description", ""),
+                    "notes":      notes,
+                    "provider":   ev.get("provider", ""),
+                    "species":    "",
+                    "breed":      "",
+                    "sex":        "",
+                    "weight":     "",
+                    "patient_id": str(pid),
                 })
+
+            # 6. Enrich each appointment with patient details (species/breed/sex/weight)
+            seen: dict = {}
+            for a in appts:
+                pid = a["patient_id"]
+                if not pid:
+                    continue
+                if pid in seen:
+                    a.update(seen[pid]); continue
+                detail = await _fetch_patient_detail(client, pid)
+                seen[pid] = detail
+                a.update(detail)
 
             appts.sort(key=lambda a: a["time"])
             _neo_schedule[date_str] = appts
