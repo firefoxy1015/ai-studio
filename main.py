@@ -1104,11 +1104,18 @@ async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
         out["color"]    = grab("colour")  or grab("color")
         out["dob"]      = grab("date_of_birth")
         out["neutered"] = grab("neutered")
-        # weight may be in a separate medical record block; try common keys
+        # weight may be in a separate medical record block; try common JSON keys
         w = grab("weight") or grab("current_weight") or grab("last_weight")
         unit = grab("weight_unit") or grab("weight_units") or ""
         if w:
             out["weight"] = f"{w} {unit}".strip()
+        else:
+            # Fallback: scan rendered text for "X.XX kg" or "X.X lb" pattern
+            soup = BeautifulSoup(html, "lxml")
+            txt = soup.get_text(" ", strip=True)
+            m = re.search(r"(\d{1,3}(?:\.\d{1,3})?)\s*(kg|lbs|lb)\b", txt, re.I)
+            if m:
+                out["weight"] = f"{m.group(1)} {m.group(2).lower()}"
         return out
     except Exception as e:
         print(f"[neo] patient {pid} fetch failed: {e}")
