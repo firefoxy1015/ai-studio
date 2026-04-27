@@ -1,11 +1,17 @@
 import asyncio
 import base64
 import json
+import os
 import random
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from bs4 import BeautifulSoup
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -22,6 +28,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── IDEXX Neo credentials (from Render env vars) ─────────────────────────────
+NEO_COMPANY = os.environ.get("NEO_COMPANY", "8890")
+NEO_USER    = os.environ.get("NEO_USER", "")
+NEO_PASS    = os.environ.get("NEO_PASS", "")
+NEO_BASE    = "https://us.idexxneo.com"
 
 DATA999_KEY = "sk-37b060cd778ee075ac3388fe421c6df1cc367f591238195c"
 DATA999_BASE = "https://api.ai6700.com"
@@ -1047,8 +1059,106 @@ async def balance():
     return r.json()
 
 
+# ── IDEXX Neo Scraper ─────────────────────────────────────────────────────────
+async def scrape_neo_schedule():
+    """Login to IDEXX Neo and scrape today's schedule into the cache."""
+    if not NEO_USER or not NEO_PASS:
+        print("[neo] NEO_USER/NEO_PASS not set, skipping scrape")
+        return
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    print(f"[neo] scraping schedule for {date_str}")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+            # 1. GET login page → grab CSRF token from cookie
+            r = await client.get(f"{NEO_BASE}/login/")
+            xsrf = client.cookies.get("XSRF-TOKEN", "")
+
+            # 2. POST login
+            login = await client.post(f"{NEO_BASE}/login/", data={
+                "company_id": NEO_COMPANY,
+                "username": NEO_USER,
+                "password": NEO_PASS,
+                "_token": xsrf,
+            }, headers={"X-XSRF-TOKEN": xsrf, "Referer": f"{NEO_BASE}/login/"})
+
+            if login.status_code not in (200, 302):
+                print(f"[neo] login failed: {login.status_code}")
+                return
+
+            # Refresh XSRF after login
+            xsrf = client.cookies.get("XSRF-TOKEN", xsrf)
+
+            # 3. GET schedule page
+            sched = await client.get(
+                f"{NEO_BASE}/schedule?date={date_str}",
+                headers={"X-XSRF-TOKEN": xsrf, "Referer": f"{NEO_BASE}/schedule"},
+            )
+
+            # 4. Parse appointments from HTML
+            soup = BeautifulSoup(sched.text, "lxml")
+            appts = []
+            for link in soup.select("a[href]"):
+                texts = [t.strip() for t in link.stripped_strings if t.strip()]
+                if not texts:
+                    continue
+                # Find time pattern
+                time_val = next((t for t in texts if re.match(r"\d{1,2}:\d{2}(am|pm)", t, re.I)), None)
+                if not time_val:
+                    continue
+                patient  = next((t for t in texts if ";" in t), "")
+                room     = next((t for t in texts if re.search(r"Examination room|Ultrasound|Tech Appoint", t, re.I)), "")
+                provider = next((t for t in texts if re.search(r"DVM|Dr\.", t)), "")
+                appt_type= next((t for t in texts if re.search(r"Exam|Surgery|Vaccine|Tech Visit|Recheck|New Patient|Vaccines Only", t, re.I)), "")
+                # Notes: first text that is not any of the above and not the time/patient
+                skip = {time_val, patient, room, provider, appt_type}
+                noise = re.compile(r"Click|Arrived|Edit|Not Arrived|Emergency", re.I)
+                notes = next((t for t in texts if t not in skip and not noise.search(t) and len(t) > 5 and t != patient.split(";")[0].strip()), "")
+                # Split patient/owner
+                owner = ""
+                if ";" in patient:
+                    parts = patient.split(";", 1)
+                    patient = parts[0].strip()
+                    owner   = parts[1].strip() if len(parts) > 1 else ""
+                if patient:
+                    appts.append({
+                        "time": time_val, "patient": patient, "owner": owner,
+                        "room": room, "type": appt_type, "notes": notes[:120],
+                        "provider": provider,
+                    })
+
+            # Deduplicate by (time, patient)
+            seen = set()
+            unique = []
+            for a in appts:
+                key = (a["time"], a["patient"])
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(a)
+
+            _neo_schedule[date_str] = unique
+            print(f"[neo] cached {len(unique)} appointments for {date_str}")
+    except Exception as e:
+        print(f"[neo] scrape error: {e}")
+
+
+# ── Scheduler: 9am–10pm every hour ────────────────────────────────────────────
+_scheduler = AsyncIOScheduler(timezone="America/Vancouver")
+
+@app.on_event("startup")
+async def start_scheduler():
+    _scheduler.add_job(
+        scrape_neo_schedule,
+        CronTrigger(hour="9-22", minute="0", timezone="America/Vancouver"),
+    )
+    _scheduler.start()
+    print("[scheduler] started — IDEXX Neo scrape every hour 9am–10pm PT")
+    # Run once immediately on startup if within clinic hours
+    now_h = datetime.now().hour
+    if 9 <= now_h <= 22:
+        asyncio.create_task(scrape_neo_schedule())
+
+
 if __name__ == "__main__":
-    import os
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
