@@ -1073,26 +1073,36 @@ async def scrape_neo_schedule():
             r = await client.get(f"{NEO_BASE}/login/")
             xsrf = client.cookies.get("XSRF-TOKEN", "")
 
-            # 2. POST login
+            # 2. GET login page to get form structure
+            login_page = await client.get(f"{NEO_BASE}/login/")
+            lsoup = BeautifulSoup(login_page.text, "lxml")
+            # Extract _token from hidden input
+            token_input = lsoup.find("input", {"name": "_token"})
+            form_token = token_input["value"] if token_input else xsrf
+            print(f"[neo] login page status={login_page.status_code} token={'ok' if form_token else 'missing'}")
+
+            # 3. POST login
             login = await client.post(f"{NEO_BASE}/login/", data={
                 "company_id": NEO_COMPANY,
                 "username": NEO_USER,
                 "password": NEO_PASS,
-                "_token": xsrf,
-            }, headers={"X-XSRF-TOKEN": xsrf, "Referer": f"{NEO_BASE}/login/"})
+                "_token": form_token,
+            }, headers={"X-XSRF-TOKEN": form_token, "Referer": f"{NEO_BASE}/login/"})
+            print(f"[neo] login POST status={login.status_code} url={str(login.url)[:60]}")
 
-            if login.status_code not in (200, 302):
-                print(f"[neo] login failed: {login.status_code}")
+            if "/login" in str(login.url):
+                print("[neo] still on login page — auth failed")
                 return
 
             # Refresh XSRF after login
             xsrf = client.cookies.get("XSRF-TOKEN", xsrf)
 
-            # 3. GET schedule page
+            # 4. GET schedule page
             sched = await client.get(
                 f"{NEO_BASE}/schedule?date={date_str}",
                 headers={"X-XSRF-TOKEN": xsrf, "Referer": f"{NEO_BASE}/schedule"},
             )
+            print(f"[neo] schedule status={sched.status_code} url={str(sched.url)[:60]} len={len(sched.text)}")
 
             # 4. Parse appointments from HTML
             soup = BeautifulSoup(sched.text, "lxml")
