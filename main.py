@@ -1008,6 +1008,35 @@ async def proxy_download(url: str, filename: str = "download"):
         raise HTTPException(500, f"proxy error: {e}")
 
 
+# ── IDEXX Neo Schedule Cache ──────────────────────────────────────────────────
+_neo_schedule: dict = {}  # { "2026-04-27": [...appointments] }
+
+class NeoAppointment(BaseModel):
+    time: str
+    patient: str
+    owner: str
+    room: str
+    type: str
+    notes: str
+    provider: str = ""
+
+class NeoScheduleData(BaseModel):
+    date: str
+    appointments: List[NeoAppointment]
+
+@app.post("/api/neo-schedule")
+async def save_neo_schedule(data: NeoScheduleData):
+    _neo_schedule[data.date] = [a.dict() for a in data.appointments]
+    return {"ok": True, "date": data.date, "count": len(data.appointments)}
+
+@app.get("/api/neo-schedule")
+async def get_neo_schedule(date: str = ""):
+    if not date:
+        from datetime import datetime
+        date = datetime.now().strftime("%Y-%m-%d")
+    return {"date": date, "appointments": _neo_schedule.get(date, [])}
+
+
 @app.get("/api/balance")
 async def balance():
     r = await http().get(
