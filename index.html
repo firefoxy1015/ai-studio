@@ -799,7 +799,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
                             <video v-for="url in task.results" :key="url" :src="url" controls></video>
                           </template>
                           <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-                            <button class="btn-sm" @click="window.open(task.results[0],'_blank')">⬇ 下载</button>
+                            <button class="btn-sm" @click="downloadResult(task)">⬇ 下载</button>
                             <button class="btn-sm" @click="navigator.clipboard.writeText(task.results[0]).then(()=>alert('已复制'))">🔗 复制链接</button>
                             <button class="btn-sm" @click="agentTaskRerun(task)">🔄 重新生成</button>
                           </div>
@@ -894,7 +894,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
                           <video v-for="url in task.results" :key="url" :src="url" controls></video>
                         </template>
                         <div style="margin-top:6px;display:flex;gap:6px">
-                          <button class="btn-sm" @click="window.open(task.results[0],'_blank')">⬇ 下载</button>
+                          <button class="btn-sm" @click="downloadResult(task)">⬇ 下载</button>
                           <button class="btn-sm" @click="navigator.clipboard.writeText(task.results[0]).then(()=>alert('已复制'))">🔗 复制链接</button>
                         </div>
                       </div>
@@ -1583,6 +1583,24 @@ createApp({
       const i = mangaSettings.visualStyles.indexOf(s)
       if (i >= 0) mangaSettings.visualStyles.splice(i, 1)
       else mangaSettings.visualStyles.push(s)
+    }
+
+    // Force-download a result via backend proxy (browser save dialog)
+    async function downloadResult(task) {
+      const url = task.results?.[0]
+      if (!url) return
+      const cat = task.category === 'image' ? 'jpg'
+                : task.category === 'music' ? 'mp3'
+                : 'mp4'
+      const fname = `${(task.label || 'result').replace(/\s+/g,'_').slice(0,40)}.${cat}`
+      const proxied = `/api/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(fname)}`
+      // Use a temporary <a download> click to trigger save dialog
+      const a = document.createElement('a')
+      a.href = proxied
+      a.download = fname
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => a.remove(), 1000)
     }
 
     function selectAgent(a) {

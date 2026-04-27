@@ -979,6 +979,35 @@ async def manga_concat(req: ConcatRequest):
         raise HTTPException(500, f"concat error: {type(e).__name__}: {e} | log={debug_log}")
 
 
+@app.get("/api/proxy-download")
+async def proxy_download(url: str, filename: str = "download"):
+    """Stream a remote file with Content-Disposition: attachment so the browser saves it.
+    Bypasses CORS / cross-origin download attribute restrictions on third-party CDNs.
+    """
+    try:
+        upstream = await http().get(
+            url, follow_redirects=True, timeout=300,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if upstream.status_code != 200:
+            raise HTTPException(400, f"upstream HTTP {upstream.status_code}")
+        ct = upstream.headers.get("content-type", "application/octet-stream")
+        # Sanitize filename
+        safe_name = re.sub(r'[^\w.\-]+', '_', filename)[:120] or "download"
+        return StreamingResponse(
+            iter([upstream.content]),
+            media_type=ct,
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_name}"',
+                "Content-Length": str(len(upstream.content)),
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"proxy error: {e}")
+
+
 @app.get("/api/balance")
 async def balance():
     r = await http().get(
