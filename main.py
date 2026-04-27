@@ -1022,7 +1022,6 @@ async def proxy_download(url: str, filename: str = "download"):
 
 # ── IDEXX Neo Schedule Cache ──────────────────────────────────────────────────
 _neo_schedule: dict = {}  # { "2026-04-27": [...appointments] }
-_neo_debug: dict = {}     # latest raw event + extra responses for inspection
 
 class NeoAppointment(BaseModel):
     time: str
@@ -1037,6 +1036,9 @@ class NeoAppointment(BaseModel):
     sex: str = ""
     age: str = ""
     weight: str = ""
+    color: str = ""
+    dob: str = ""
+    neutered: str = ""
     patient_id: str = ""
 
 class NeoScheduleData(BaseModel):
@@ -1067,89 +1069,50 @@ async def balance():
 
 
 # ── IDEXX Neo Scraper ─────────────────────────────────────────────────────────
+def _age_from_dob(dob: str) -> str:
+    """Convert YYYY-MM-DD birth date to '11 yrs 8 mos' style label."""
+    try:
+        from datetime import date as _date
+        y, m, d = (int(x) for x in dob.split("-")[:3])
+        b = _date(y, m, d); t = _date.today()
+        months = (t.year - b.year) * 12 + (t.month - b.month) - (1 if t.day < b.day else 0)
+        if months < 0: return ""
+        years, mos = divmod(months, 12)
+        if years and mos:  return f"{years} yrs {mos} mos"
+        if years:          return f"{years} yrs"
+        return f"{mos} mos"
+    except Exception:
+        return ""
+
+
 async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
-    """Best-effort fetch of patient species/breed/sex/weight. Returns {} on failure."""
-    out = {"species": "", "breed": "", "sex": "", "weight": ""}
-    # Try a few likely IDEXX Neo endpoints. First successful JSON wins.
-    candidates = [
-        f"{NEO_BASE}/patients/getPatientData?id={pid}",
-        f"{NEO_BASE}/patients/getPatient?id={pid}",
-        f"{NEO_BASE}/patients/getDetails?id={pid}",
-        f"{NEO_BASE}/patients/getPatientInfo?id={pid}",
-        f"{NEO_BASE}/patients/getInfo?id={pid}",
-        f"{NEO_BASE}/patients/get/{pid}",
-        f"{NEO_BASE}/patients/view/{pid}",
-        f"{NEO_BASE}/patients/edit/{pid}",
-        f"{NEO_BASE}/patients/{pid}",
-        f"{NEO_BASE}/patients/{pid}/get",
-        f"{NEO_BASE}/patients/{pid}/details",
-        f"{NEO_BASE}/patient/getPatient?id={pid}",
-        f"{NEO_BASE}/patient/{pid}",
-        f"{NEO_BASE}/patient/view/{pid}",
-        f"{NEO_BASE}/api/patients/{pid}",
-        f"{NEO_BASE}/api/patient/{pid}",
-    ]
-    if not getattr(_fetch_patient_detail, "_probed", False):
-        # Probe all once and log status codes so we can see what exists
-        statuses = []
-        for url in candidates:
-            try:
-                rr = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
-                statuses.append(f"{rr.status_code}:{url.replace(NEO_BASE,'')}")
-            except Exception as e:
-                statuses.append(f"ERR:{url.replace(NEO_BASE,'')}:{e}")
-        print(f"[neo] patient endpoint probe for pid={pid}:")
-        for s in statuses: print(f"   {s}")
-        _fetch_patient_detail._probed = True
-    for url in candidates:
-        try:
-            r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
-            if r.status_code != 200:
-                continue
-            ct = r.headers.get("content-type", "")
-            if "json" in ct:
-                d = r.json()
-                # Some endpoints wrap data in {"patient": {...}} or {"data": {...}}
-                if isinstance(d, dict):
-                    for key in ("patient", "data", "result"):
-                        if isinstance(d.get(key), dict):
-                            d = d[key]; break
-                # First-time discovery log
-                if not getattr(_fetch_patient_detail, "_logged", False):
-                    print(f"[neo] patient detail keys ({url.split('?')[0].split('/')[-1]}): "
-                          f"{list(d.keys()) if isinstance(d, dict) else type(d).__name__}")
-                    _fetch_patient_detail._logged = True
-                if isinstance(d, dict):
-                    out["species"] = str(d.get("species") or d.get("species_name") or
-                                          d.get("Species") or "")
-                    out["breed"]   = str(d.get("breed") or d.get("breed_name") or
-                                          d.get("Breed") or "")
-                    out["sex"]     = str(d.get("sex") or d.get("gender") or
-                                          d.get("Sex") or "")
-                    w = (d.get("weight") or d.get("current_weight") or
-                         d.get("Weight") or "")
-                    unit = d.get("weight_unit") or d.get("weight_units") or ""
-                    out["weight"] = (f"{w} {unit}".strip() if w else "")
-                return out
-            elif "html" in ct:
-                # HTML fallback: scrape labelled fields
-                soup = BeautifulSoup(r.text, "lxml")
-                txt = soup.get_text(" ", strip=True)
-                import re
-                def grab(label):
-                    m = re.search(rf"{label}\s*[:：]\s*([^\n|•]+?)(?:\s{{2,}}|$|[|•])",
-                                  txt, re.I)
-                    return m.group(1).strip() if m else ""
-                out["species"] = grab("Species")
-                out["breed"]   = grab("Breed")
-                out["sex"]     = grab("Sex") or grab("Gender")
-                out["weight"]  = grab("Weight")
-                if any(out.values()):
-                    return out
-        except Exception as e:
-            print(f"[neo] patient {pid} via {url.split('/')[-1]} failed: {e}")
-            continue
-    return out
+    """Fetch /patients/view/{pid} and extract embedded JSON patient fields."""
+    out = {"species": "", "breed": "", "sex": "", "weight": "",
+           "color": "", "dob": "", "neutered": ""}
+    try:
+        r = await client.get(f"{NEO_BASE}/patients/view/{pid}")
+        if r.status_code != 200:
+            return out
+        html = r.text
+        import re
+        def grab(key: str) -> str:
+            m = re.search(rf'"{key}"\s*:\s*"([^"]*)"', html)
+            return m.group(1) if m else ""
+        out["species"]  = grab("species") or grab("species_name")
+        out["breed"]    = grab("breed")   or grab("breed_name")
+        out["sex"]      = grab("sex")     or grab("gender_name")
+        out["color"]    = grab("colour")  or grab("color")
+        out["dob"]      = grab("date_of_birth")
+        out["neutered"] = grab("neutered")
+        # weight may be in a separate medical record block; try common keys
+        w = grab("weight") or grab("current_weight") or grab("last_weight")
+        unit = grab("weight_unit") or grab("weight_units") or ""
+        if w:
+            out["weight"] = f"{w} {unit}".strip()
+        return out
+    except Exception as e:
+        print(f"[neo] patient {pid} fetch failed: {e}")
+        return out
 
 
 async def scrape_neo_schedule():
@@ -1194,8 +1157,6 @@ async def scrape_neo_schedule():
             for i, ev in enumerate(events):
                 if ev.get("is_block"):
                     continue
-                if i == 0:
-                    _neo_debug["sample_event"] = ev
                 title = ev.get("title", "")
                 parts = title.split(";", 1)
                 patient = parts[0].strip()
@@ -1207,24 +1168,9 @@ async def scrape_neo_schedule():
                     time_fmt = t.strftime("%-I:%M%p").lower()
                 except Exception:
                     time_fmt = start[11:16]
-                notes = (ev.get("reason") or ev.get("popup_title_text") or "")[:120]
+                notes = (ev.get("reason") or ev.get("popup_title_text") or "")
                 pid = (ev.get("patient_id") or ev.get("patientId")
                        or ev.get("patient") or ev.get("pet_id") or "")
-                # Scan all string fields for the popup summary line:
-                # "Feline|Shorthair,British|F/S|11 yrs 8 mos|5.92 kg"
-                species = breed = sex = age = weight = ""
-                for v in ev.values():
-                    if not isinstance(v, str) or v.count("|") < 3:
-                        continue
-                    bits = [b.strip() for b in v.split("|")]
-                    # Heuristic: find one where a bit ends with "kg" or "lb"
-                    if not any(b.lower().endswith(("kg", "lb", "lbs")) for b in bits):
-                        continue
-                    if len(bits) >= 5:
-                        species, breed, sex, age, weight = bits[:5]
-                    elif len(bits) == 4:
-                        species, breed, sex, weight = bits
-                    break
                 appts.append({
                     "time":       time_fmt,
                     "patient":    patient,
@@ -1233,73 +1179,29 @@ async def scrape_neo_schedule():
                     "type":       ev.get("type_description", ""),
                     "notes":      notes,
                     "provider":   ev.get("provider", ""),
-                    "species":    species,
-                    "breed":      breed,
-                    "sex":        sex,
-                    "age":        age,
-                    "weight":     weight,
+                    "species":    "",
+                    "breed":      "",
+                    "sex":        "",
+                    "age":        "",
+                    "weight":     "",
+                    "color":      "",
+                    "dob":        "",
+                    "neutered":   "",
                     "patient_id": str(pid),
                 })
 
-            # DEBUG: probe popup-like endpoints with first event's id/patient_id
-            if appts and not _neo_debug.get("probed"):
-                first_ev = events[0] if events else {}
-                eid = str(first_ev.get("id", ""))
-                pid = str(first_ev.get("patient_id") or first_ev.get("patientId") or "")
-                probe_urls = [
-                    f"{NEO_BASE}/appointments/getPopupData?id={eid}",
-                    f"{NEO_BASE}/appointments/getEventData?id={eid}",
-                    f"{NEO_BASE}/appointments/getAppointmentData?id={eid}",
-                    f"{NEO_BASE}/appointments/popup?id={eid}",
-                    f"{NEO_BASE}/appointments/getPopupHtml?id={eid}",
-                    f"{NEO_BASE}/appointments/getPopup?id={eid}",
-                    f"{NEO_BASE}/appointments/details/{eid}",
-                    f"{NEO_BASE}/patients/getPatientPopup?id={pid}",
-                    f"{NEO_BASE}/patients/getPopup?id={pid}",
-                    f"{NEO_BASE}/patients/popup?id={pid}",
-                    f"{NEO_BASE}/patients/summary?id={pid}",
-                    f"{NEO_BASE}/patients/getSummary?id={pid}",
-                    f"{NEO_BASE}/patients/{pid}/summary",
-                    f"{NEO_BASE}/patients/getPatient?id={pid}",
-                    f"{NEO_BASE}/patients/view/{pid}",
-                ]
-                probe_results = []
-                for url in probe_urls:
-                    try:
-                        rr = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
-                        snippet = rr.text[:300] if rr.status_code == 200 else ""
-                        probe_results.append({"url": url, "status": rr.status_code,
-                                              "ct": rr.headers.get("content-type",""),
-                                              "snippet": snippet})
-                    except Exception as e:
-                        probe_results.append({"url": url, "error": str(e)})
-                _neo_debug["probes"] = probe_results
-                # Fetch full /patients/view/{pid} HTML for inspection
-                try:
-                    rr = await client.get(f"{NEO_BASE}/patients/view/{pid}")
-                    html = rr.text
-                    soup = BeautifulSoup(html, "lxml")
-                    # Heuristic: find segments that contain "kg" and pipe characters
-                    txt = soup.get_text("\n", strip=True)
-                    pipe_lines = [ln for ln in txt.split("\n") if ln.count("|") >= 2]
-                    _neo_debug["view_pipe_lines"] = pipe_lines[:20]
-                    # Also look for fields by common label patterns
-                    import re
-                    found = {}
-                    for label in ("Species","Breed","Sex","Gender","Weight","Color","Age","DOB"):
-                        m = re.search(rf">\s*{label}\s*</[^>]+>\s*<[^>]+>\s*([^<\n]{{1,80}})",
-                                      html, re.I)
-                        if m: found[label] = m.group(1).strip()
-                    _neo_debug["view_label_extract"] = found
-                    # Capture a chunk near "Species" or "kg"
-                    for needle in ("Species", "kg", "lbs"):
-                        idx = html.lower().find(needle.lower())
-                        if idx > 0:
-                            _neo_debug[f"view_near_{needle}"] = html[max(0,idx-200):idx+400]
-                            break
-                except Exception as e:
-                    _neo_debug["view_error"] = str(e)
-                _neo_debug["probed"] = True
+            # 6. Enrich each appointment with patient details from /patients/view/{id}
+            seen: dict = {}
+            for a in appts:
+                pid = a["patient_id"]
+                if not pid:
+                    continue
+                if pid not in seen:
+                    seen[pid] = await _fetch_patient_detail(client, pid)
+                a.update(seen[pid])
+                # Compute age from dob
+                if a.get("dob") and not a.get("age"):
+                    a["age"] = _age_from_dob(a["dob"])
 
             appts.sort(key=lambda a: a["time"])
             _neo_schedule[date_str] = appts
@@ -1326,14 +1228,8 @@ async def start_scheduler():
 @app.post("/api/neo-schedule/refresh")
 async def refresh_neo_schedule():
     """Manually trigger a schedule scrape."""
-    _neo_debug.pop("probed", None)  # allow re-probe
     asyncio.create_task(scrape_neo_schedule())
     return {"ok": True, "message": "scrape triggered"}
-
-@app.get("/api/neo-debug")
-async def neo_debug():
-    """Inspect last raw event + endpoint probe results."""
-    return _neo_debug
 
 
 if __name__ == "__main__":
