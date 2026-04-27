@@ -1274,6 +1274,31 @@ async def scrape_neo_schedule():
                     except Exception as e:
                         probe_results.append({"url": url, "error": str(e)})
                 _neo_debug["probes"] = probe_results
+                # Fetch full /patients/view/{pid} HTML for inspection
+                try:
+                    rr = await client.get(f"{NEO_BASE}/patients/view/{pid}")
+                    html = rr.text
+                    soup = BeautifulSoup(html, "lxml")
+                    # Heuristic: find segments that contain "kg" and pipe characters
+                    txt = soup.get_text("\n", strip=True)
+                    pipe_lines = [ln for ln in txt.split("\n") if ln.count("|") >= 2]
+                    _neo_debug["view_pipe_lines"] = pipe_lines[:20]
+                    # Also look for fields by common label patterns
+                    import re
+                    found = {}
+                    for label in ("Species","Breed","Sex","Gender","Weight","Color","Age","DOB"):
+                        m = re.search(rf">\s*{label}\s*</[^>]+>\s*<[^>]+>\s*([^<\n]{{1,80}})",
+                                      html, re.I)
+                        if m: found[label] = m.group(1).strip()
+                    _neo_debug["view_label_extract"] = found
+                    # Capture a chunk near "Species" or "kg"
+                    for needle in ("Species", "kg", "lbs"):
+                        idx = html.lower().find(needle.lower())
+                        if idx > 0:
+                            _neo_debug[f"view_near_{needle}"] = html[max(0,idx-200):idx+400]
+                            break
+                except Exception as e:
+                    _neo_debug["view_error"] = str(e)
                 _neo_debug["probed"] = True
 
             appts.sort(key=lambda a: a["time"])
