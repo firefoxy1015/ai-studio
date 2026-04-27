@@ -1073,8 +1073,32 @@ async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
         f"{NEO_BASE}/patients/getPatientData?id={pid}",
         f"{NEO_BASE}/patients/getPatient?id={pid}",
         f"{NEO_BASE}/patients/getDetails?id={pid}",
+        f"{NEO_BASE}/patients/getPatientInfo?id={pid}",
+        f"{NEO_BASE}/patients/getInfo?id={pid}",
+        f"{NEO_BASE}/patients/get/{pid}",
         f"{NEO_BASE}/patients/view/{pid}",
+        f"{NEO_BASE}/patients/edit/{pid}",
+        f"{NEO_BASE}/patients/{pid}",
+        f"{NEO_BASE}/patients/{pid}/get",
+        f"{NEO_BASE}/patients/{pid}/details",
+        f"{NEO_BASE}/patient/getPatient?id={pid}",
+        f"{NEO_BASE}/patient/{pid}",
+        f"{NEO_BASE}/patient/view/{pid}",
+        f"{NEO_BASE}/api/patients/{pid}",
+        f"{NEO_BASE}/api/patient/{pid}",
     ]
+    if not getattr(_fetch_patient_detail, "_probed", False):
+        # Probe all once and log status codes so we can see what exists
+        statuses = []
+        for url in candidates:
+            try:
+                rr = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+                statuses.append(f"{rr.status_code}:{url.replace(NEO_BASE,'')}")
+            except Exception as e:
+                statuses.append(f"ERR:{url.replace(NEO_BASE,'')}:{e}")
+        print(f"[neo] patient endpoint probe for pid={pid}:")
+        for s in statuses: print(f"   {s}")
+        _fetch_patient_detail._probed = True
     for url in candidates:
         try:
             r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
@@ -1169,8 +1193,10 @@ async def scrape_neo_schedule():
                 if ev.get("is_block"):
                     continue
                 if i == 0:
-                    # debug: show all keys of first event so we can spot patient_id-like fields
+                    # debug: show all keys + full first event so we can spot useful fields
                     print(f"[neo] sample event keys: {list(ev.keys())}")
+                    import json as _json
+                    print(f"[neo] sample event full: {_json.dumps(ev, default=str)[:1500]}")
                 title = ev.get("title", "")
                 parts = title.split(";", 1)
                 patient = parts[0].strip()
