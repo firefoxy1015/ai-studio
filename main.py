@@ -1152,11 +1152,15 @@ async def _fetch_patient_history(client: httpx.AsyncClient, pid: str, days: int 
                 continue
             keep.append(s)
         body = "\n".join(keep).strip()
+        # Capture consult_id (e.g. "#23041" in header)
+        cid_m = _re.search(r"#(\d+)", header_str)
+        consult_id = cid_m.group(1) if cid_m else ""
         consults.append({
-            "header":  header_str[:200],
-            "title":   title[:200],
-            "vitals":  vitals[:120],
-            "body":    body[:2500],   # cap each consult
+            "header":     header_str[:200],
+            "title":      title[:200],
+            "vitals":     vitals[:120],
+            "body":       body[:2500],
+            "consult_id": consult_id,
         })
     return consults
 
@@ -1368,6 +1372,84 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
         raise
     except Exception as e:
         raise HTTPException(500, f"history fetch failed: {e}")
+
+
+class ConsultUpdateS(BaseModel):
+    pid: str
+    consult_id: str
+    original_s: str
+    corrected_s: str
+
+@app.post("/api/neo-consult-update-s")
+async def neo_consult_update_s(data: ConsultUpdateS):
+    """Update only the S (Subjective) section of a consult's notes.
+    First-pass: probe Neo for the consult-edit endpoint, attempt save,
+    return detailed diagnostic on failure so we can iterate.
+    """
+    if not data.consult_id:
+        raise HTTPException(400, "consult_id required")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+            if not await _neo_login(client):
+                raise HTTPException(503, "neo auth failed")
+
+            diagnostic = {"tried": [], "consult_id": data.consult_id}
+
+            # Try common Neo consult-view endpoints to find the notes-edit hook.
+            candidates = [
+                f"{NEO_BASE}/consultations/view/{data.consult_id}",
+                f"{NEO_BASE}/consultations/edit/{data.consult_id}",
+                f"{NEO_BASE}/ajax/output/?page=consultations/edit&consult_id={data.consult_id}",
+                f"{NEO_BASE}/ajax/output/?page=consultations/view&consult_id={data.consult_id}",
+            ]
+            page_html = None
+            page_url  = None
+            for url in candidates:
+                try:
+                    r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+                    diagnostic["tried"].append({"url": url, "status": r.status_code, "len": len(r.text)})
+                    if r.status_code == 200 and len(r.text) > 500:
+                        page_html = r.text
+                        page_url  = url
+                        break
+                except Exception as e:
+                    diagnostic["tried"].append({"url": url, "err": str(e)})
+
+            if not page_html:
+                return {"ok": False, "message": "Could not fetch consult page",
+                        "diagnostic": diagnostic}
+
+            # Inspect the form to find action URL + textarea for notes
+            soup = BeautifulSoup(page_html, "lxml")
+            forms_info = []
+            for f in soup.find_all("form"):
+                forms_info.append({
+                    "action": f.get("action", ""),
+                    "method": f.get("method", ""),
+                    "id":     f.get("id", ""),
+                    "inputs": [{"name": i.get("name",""), "type": i.get("type","")} for i in f.find_all(["input","textarea","select"])][:30],
+                })
+            diagnostic["page_url"] = page_url
+            diagnostic["forms"]    = forms_info[:5]
+            # Look for textareas containing the original S text
+            ta_match = []
+            for ta in soup.find_all("textarea"):
+                txt = ta.get_text() or ""
+                if data.original_s and data.original_s[:40] in txt:
+                    ta_match.append({"name": ta.get("name",""), "id": ta.get("id",""),
+                                     "form": (ta.find_parent("form").get("id","") if ta.find_parent("form") else "")})
+            diagnostic["textarea_matches"] = ta_match
+
+            # Save not yet wired — return diagnostics so we can pinpoint the right endpoint.
+            return {
+                "ok": False,
+                "message": "Save endpoint not yet identified — diagnostics below; please share so we can wire the actual save call.",
+                "diagnostic": diagnostic,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"ok": False, "message": f"exception: {e}"}
 
 
 if __name__ == "__main__":
