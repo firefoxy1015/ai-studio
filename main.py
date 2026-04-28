@@ -1525,39 +1525,49 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 td2.replace_with(new_td2)
                 return str(soup2), applied2, None
 
-            put = await _do_put(new_full_html, version)
-            if put.status_code == 200:
-                # Even a 200 can be the "Object is already modified" body
+            # Helper: detect "Object is already modified" regardless of status code
+            def _conflict_payload(resp):
+                if "Object is already modified" not in (resp.text or ""):
+                    return None
                 try:
-                    pj = put.json()
+                    j = resp.json()
                 except Exception:
-                    pj = {}
-                if isinstance(pj, dict) and pj.get("message") == "Object is already modified":
-                    fresh = pj.get("consultationNotes") or {}
-                    fresh_html = fresh.get("notes") or ""
-                    fresh_ver  = fresh.get("notesVersion") or ""
-                    if fresh_html and fresh_ver:
-                        retry_html, retry_applied, err = _apply_corrections_to_full_html(fresh_html)
-                        if err:
-                            return {"ok": False, "message": f"retry parse failed: {err}",
-                                    "diagnostic": {"applied": applied}}
-                        put2 = await _do_put(retry_html, fresh_ver)
-                        if put2.status_code == 200:
-                            try: pj2 = put2.json()
-                            except Exception: pj2 = {}
-                            if isinstance(pj2, dict) and pj2.get("message") == "Object is already modified":
-                                return {"ok": False, "message": "still conflicting after retry",
-                                        "diagnostic": {"resp": put2.text[:400]}}
-                            return {"ok": True, "applied": retry_applied,
-                                    "message": f"saved {sum(a['count'] for a in retry_applied)} edits (after refresh)"}
-                        return {"ok": False, "message": f"retry PUT failed: {put2.status_code}",
-                                "diagnostic": {"resp": put2.text[:400]}}
-                    return {"ok": False, "message": "version conflict and no fresh data returned",
-                            "diagnostic": {"resp": put.text[:400]}}
-                return {"ok": True, "applied": applied,
-                        "message": f"saved {sum(a['count'] for a in applied)} edits"}
-            return {"ok": False, "message": f"PUT failed: {put.status_code}",
-                    "diagnostic": {"resp": put.text[:400], "applied": applied}}
+                    return None
+                if not isinstance(j, dict): return None
+                cn = j.get("consultationNotes") or {}
+                fh = cn.get("notes") or ""
+                fv = cn.get("notesVersion") or ""
+                if fh and fv:
+                    return {"notes": fh, "notesVersion": fv}
+                return None
+
+            # Try up to 4 times: each time a conflict comes back, re-apply
+            # corrections to the latest notes Neo gave us and PUT again.
+            current_html_full = new_full_html
+            current_version   = version
+            current_applied   = applied
+            last_resp         = None
+            for attempt in range(4):
+                put = await _do_put(current_html_full, current_version)
+                last_resp = put
+                conflict = _conflict_payload(put)
+                if conflict is None:
+                    if put.status_code == 200:
+                        return {"ok": True, "applied": current_applied,
+                                "message": f"saved {sum(a['count'] for a in current_applied)} edits" + (f" (retry {attempt})" if attempt else "")}
+                    return {"ok": False, "message": f"PUT failed: {put.status_code}",
+                            "diagnostic": {"resp": put.text[:400], "applied": current_applied}}
+                # rebuild from fresh notes returned by server
+                retry_html, retry_applied, err = _apply_corrections_to_full_html(conflict["notes"])
+                if err:
+                    return {"ok": False, "message": f"retry parse failed: {err}",
+                            "diagnostic": {"applied": current_applied}}
+                current_html_full = retry_html
+                current_version   = conflict["notesVersion"]
+                current_applied   = retry_applied
+            return {"ok": False, "message": "still conflicting after 4 retries",
+                    "diagnostic": {"resp": (last_resp.text[:400] if last_resp else ""),
+                                   "applied": current_applied}}
     except HTTPException:
         raise
     except Exception as e:
