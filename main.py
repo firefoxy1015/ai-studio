@@ -1054,7 +1054,11 @@ async def save_neo_schedule(data: NeoScheduleData):
 async def get_neo_schedule(date: str = ""):
     if not date:
         from datetime import datetime
-        date = datetime.now().strftime("%Y-%m-%d")
+        try:
+            from zoneinfo import ZoneInfo
+            date = datetime.now(ZoneInfo("America/Vancouver")).strftime("%Y-%m-%d")
+        except Exception:
+            date = datetime.now().strftime("%Y-%m-%d")
     return {"date": date, "appointments": _neo_schedule.get(date, [])}
 
 
@@ -1208,7 +1212,12 @@ async def scrape_neo_schedule():
     if not NEO_USER or not NEO_PASS:
         print("[neo] NEO_USER/NEO_PASS not set, skipping")
         return
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    # Use Vancouver local date (clinic timezone), not server UTC
+    try:
+        from zoneinfo import ZoneInfo
+        date_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%Y-%m-%d")
+    except Exception:
+        date_str = datetime.now().strftime("%Y-%m-%d")
     print(f"[neo] scraping {date_str}")
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
