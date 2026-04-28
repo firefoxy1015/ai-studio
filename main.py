@@ -1443,7 +1443,11 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 return None
 
             current_html = _deep_find(payload, "notes") or ""
-            version      = _deep_find(payload, "notesVersion") or ""
+            # Neo's optimistic-concurrency token is `notesUpdatedAtLocal`
+            # (a "YYYY-MM-DD HH:MM:SS" string), NOT `notesVersion`.
+            version = (_deep_find(payload, "notesUpdatedAtLocal")
+                       or _deep_find(payload, "notesVersion")
+                       or "")
             if not current_html:
                 return {"ok": False, "message": "no notes field found in page-data",
                         "diagnostic": {"top_keys": list(payload.keys()) if isinstance(payload, dict) else "non-dict"}}
@@ -1491,10 +1495,13 @@ async def neo_consult_update_s(data: ConsultUpdateS):
             #    We re-apply the same corrections to the freshly-returned notes
             #    HTML and PUT once more.
             async def _do_put(html_to_save, ver):
+                # Send BOTH possible field names — harmless if one is ignored.
                 return await client.put(
                     put_api,
                     headers={**base_headers, "Content-Type": "application/json"},
-                    json={"notes": html_to_save, "notesVersion": ver},
+                    json={"notes": html_to_save,
+                          "notesUpdatedAtLocal": ver,
+                          "notesVersion": ver},
                 )
 
             def _apply_corrections_to_full_html(full_html):
@@ -1540,10 +1547,10 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 # 1) try the documented shape first
                 cn = j.get("consultationNotes") or {}
                 fh = cn.get("notes") or _deep_find(j, "notes") or ""
-                fv = (cn.get("notesVersion")
+                fv = (cn.get("notesUpdatedAtLocal")
+                      or _deep_find(j, "notesUpdatedAtLocal")
+                      or cn.get("notesVersion")
                       or _deep_find(j, "notesVersion")
-                      or _deep_find(j, "noteVersion")
-                      or _deep_find(j, "version")
                       or "")
                 if not fh:
                     return None
