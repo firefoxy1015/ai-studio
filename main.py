@@ -1478,15 +1478,24 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                     zone_end   = len(raw_html)
                 zone = raw_html[zone_start:zone_end]
                 applied_local = []
-                new_zone = zone
+                # Split the zone into [tag, text, tag, text, ...] segments so
+                # we only ever replace inside TEXT segments — HTML tags
+                # (everything between < and >) are kept literally untouched.
+                # This guarantees we cannot break style="width:..." attributes
+                # or tag names like <p>, <td>, <tr>, etc.
+                parts = _re.split(r"(<[^>]+>)", zone)  # odd indices = tags
                 for c in corrections_list:
                     o = (c.get("original") or "").strip()
                     cc = (c.get("corrected") or "").strip()
                     if not o or not cc or o == cc:
                         continue
                     pat = _re.compile(r"\b" + _re.escape(o) + r"\b")
-                    new_zone, n = pat.subn(cc, new_zone)
-                    applied_local.append({"original": o, "corrected": cc, "count": n})
+                    total = 0
+                    for i in range(0, len(parts), 2):  # text segments only
+                        parts[i], n = pat.subn(cc, parts[i])
+                        total += n
+                    applied_local.append({"original": o, "corrected": cc, "count": total})
+                new_zone = "".join(parts)
                 if not any(a["count"] for a in applied_local):
                     return None, applied_local, "none of the corrections matched the S text"
                 patched = raw_html[:zone_start] + new_zone + raw_html[zone_end:]
