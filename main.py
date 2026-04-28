@@ -1153,10 +1153,16 @@ async def _fetch_patient_rx(client: httpx.AsyncClient, pid: str) -> list[dict]:
         rows = r.json()
     except Exception:
         return []
+    from datetime import date as _date, timedelta as _td
+    cutoff = (_date.today() - _td(days=365)).isoformat()
     meds = []
     for row in rows:
         rx = row.get("prescription", row) if isinstance(row, dict) else {}
         if not rx or rx.get("voidedAt"): continue
+        filled = (rx.get("filledAt") or "")[:10]
+        # keep only fills within last 1 year (drop entries with no date too)
+        if not filled or filled < cutoff:
+            continue
         meds.append({
             "name":          rx.get("productName", ""),
             "rx_id":         str(rx.get("rxId", "")),
@@ -1165,8 +1171,10 @@ async def _fetch_patient_rx(client: httpx.AsyncClient, pid: str) -> list[dict]:
             "quantity":      rx.get("quantity", ""),
             "refills":       rx.get("totalRefills", 0),
             "refills_left":  rx.get("refillsRemaining"),
-            "filled_at":     (rx.get("filledAt") or "")[:10],
+            "filled_at":     filled,
         })
+    # newest filled_at first
+    meds.sort(key=lambda m: m["filled_at"], reverse=True)
     return meds
 
 
