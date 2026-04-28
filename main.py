@@ -1576,9 +1576,34 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 current_html_full = retry_html
                 current_version   = conflict["notesVersion"]
                 current_applied   = retry_applied
+            # Dump the FULL last response + a parsed-keys map so we can see
+            # what version field Neo actually returns.
+            dbg = {"applied": current_applied}
+            if last_resp is not None:
+                dbg["status"] = last_resp.status_code
+                dbg["full_resp"] = last_resp.text
+                try:
+                    jj = last_resp.json()
+                    def _walk(o, path=""):
+                        out = []
+                        if isinstance(o, dict):
+                            for k, v in o.items():
+                                p = f"{path}.{k}" if path else k
+                                if isinstance(v, (dict, list)):
+                                    out.extend(_walk(v, p))
+                                else:
+                                    s = str(v)
+                                    out.append(f"{p}={s[:80]}")
+                        elif isinstance(o, list):
+                            for i, v in enumerate(o[:3]):
+                                out.extend(_walk(v, f"{path}[{i}]"))
+                        return out
+                    dbg["fields"] = _walk(jj)
+                    dbg["last_version_sent"] = current_version
+                except Exception as e:
+                    dbg["json_err"] = str(e)
             return {"ok": False, "message": "still conflicting after 4 retries",
-                    "diagnostic": {"resp": (last_resp.text[:400] if last_resp else ""),
-                                   "applied": current_applied}}
+                    "diagnostic": dbg}
     except HTTPException:
         raise
     except Exception as e:
