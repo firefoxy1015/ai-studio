@@ -1452,41 +1452,50 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 return {"ok": False, "message": "no notes field found in page-data",
                         "diagnostic": {"top_keys": list(payload.keys()) if isinstance(payload, dict) else "non-dict"}}
 
-            # 2) Locate the S td using html.parser (no wrappers added)
-            soup = BeautifulSoup(current_html, "html.parser")
-            s_strong = None
-            for st in soup.find_all("strong"):
-                if "S = Subjective" in st.get_text():
-                    s_strong = st; break
-            if not s_strong:
-                return {"ok": False, "message": "could not locate S = Subjective header in notes"}
-            s_header_tr  = s_strong.find_parent("tr")
-            s_content_tr = s_header_tr.find_next_sibling("tr") if s_header_tr else None
-            s_td = s_content_tr.find("td") if s_content_tr else None
-            if not s_td:
-                return {"ok": False, "message": "could not locate S content td"}
-
-            # 3) Apply word-level corrections WITHIN the S td innerHTML only
+            # 2-3) Locate the S section in the RAW HTML string and patch it in
+            #      place — do NOT round-trip through BeautifulSoup.str(soup),
+            #      which destroys Neo's whitespace/paragraph layout.
             import re as _re
-            inner = s_td.decode_contents()
-            applied = []
-            for c in data.corrections:
-                orig = (c.get("original") or "").strip()
-                corr = (c.get("corrected") or "").strip()
-                if not orig or not corr or orig == corr:
-                    continue
-                # word-boundary, case-sensitive (medical typos preserve case)
-                pat = _re.compile(r"\b" + _re.escape(orig) + r"\b")
-                inner, n = pat.subn(corr, inner)
-                applied.append({"original": orig, "corrected": corr, "count": n})
-            if not any(a["count"] for a in applied):
-                return {"ok": False, "message": "none of the corrections matched the S text",
-                        "diagnostic": {"applied": applied, "td_preview": s_td.decode_contents()[:400]}}
+            def _patch_s_in_raw_html(raw_html, corrections_list):
+                # Find "S = Subjective Information" anywhere in the raw HTML
+                m_s = _re.search(r"S\s*=\s*Subjective\s+Information", raw_html, _re.IGNORECASE)
+                if not m_s:
+                    return None, None, "could not locate S = Subjective marker"
+                # Find the next "X = " section header AFTER the S marker
+                # (O = Objective / A = Assessment / P = Plan, etc.)
+                m_next = _re.search(
+                    r"[OAP]\s*=\s*(Objective|Assessment|Plan)",
+                    raw_html[m_s.end():],
+                    _re.IGNORECASE,
+                )
+                # The S "zone" is everything between the S marker and the next section
+                # header. We do replacements inside this zone only.
+                if m_next:
+                    zone_start = m_s.end()
+                    zone_end   = m_s.end() + m_next.start()
+                else:
+                    zone_start = m_s.end()
+                    zone_end   = len(raw_html)
+                zone = raw_html[zone_start:zone_end]
+                applied_local = []
+                new_zone = zone
+                for c in corrections_list:
+                    o = (c.get("original") or "").strip()
+                    cc = (c.get("corrected") or "").strip()
+                    if not o or not cc or o == cc:
+                        continue
+                    pat = _re.compile(r"\b" + _re.escape(o) + r"\b")
+                    new_zone, n = pat.subn(cc, new_zone)
+                    applied_local.append({"original": o, "corrected": cc, "count": n})
+                if not any(a["count"] for a in applied_local):
+                    return None, applied_local, "none of the corrections matched the S text"
+                patched = raw_html[:zone_start] + new_zone + raw_html[zone_end:]
+                return patched, applied_local, None
 
-            # Replace td innerHTML and serialize the FULL notes HTML
-            new_td = BeautifulSoup(f"<td>{inner}</td>", "html.parser").td
-            s_td.replace_with(new_td)
-            new_full_html = str(soup)
+            new_full_html, applied, err = _patch_s_in_raw_html(current_html, data.corrections)
+            if err:
+                return {"ok": False, "message": err,
+                        "diagnostic": {"applied": applied or []}}
 
             # 4) PUT back — with auto-retry on stale-version conflict.
             #    On conflict Neo returns 200/4xx with body
@@ -1505,32 +1514,8 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 )
 
             def _apply_corrections_to_full_html(full_html):
-                soup2 = BeautifulSoup(full_html, "html.parser")
-                strong2 = None
-                for st in soup2.find_all("strong"):
-                    if "S = Subjective" in st.get_text():
-                        strong2 = st; break
-                if not strong2:
-                    return None, None, "could not locate S header on retry"
-                tr1 = strong2.find_parent("tr")
-                tr2 = tr1.find_next_sibling("tr") if tr1 else None
-                td2 = tr2.find("td") if tr2 else None
-                if not td2:
-                    return None, None, "could not locate S td on retry"
-                inner2 = td2.decode_contents()
-                applied2 = []
-                for c in data.corrections:
-                    o = (c.get("original") or "").strip()
-                    cc = (c.get("corrected") or "").strip()
-                    if not o or not cc or o == cc: continue
-                    p = _re.compile(r"\b" + _re.escape(o) + r"\b")
-                    inner2, n = p.subn(cc, inner2)
-                    applied2.append({"original": o, "corrected": cc, "count": n})
-                if not any(a["count"] for a in applied2):
-                    return None, None, "no corrections matched on retry"
-                new_td2 = BeautifulSoup(f"<td>{inner2}</td>", "html.parser").td
-                td2.replace_with(new_td2)
-                return str(soup2), applied2, None
+                # Reuse the in-place raw-string patcher to preserve formatting
+                return _patch_s_in_raw_html(full_html, data.corrections)
 
             # Helper: detect "Object is already modified" regardless of status code.
             # Robustly locates fresh notes + version even if they're nested
