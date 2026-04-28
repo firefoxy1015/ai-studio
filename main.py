@@ -1525,7 +1525,10 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 td2.replace_with(new_td2)
                 return str(soup2), applied2, None
 
-            # Helper: detect "Object is already modified" regardless of status code
+            # Helper: detect "Object is already modified" regardless of status code.
+            # Robustly locates fresh notes + version even if they're nested
+            # somewhere deep, or under a slightly different name.
+            import time as _time
             def _conflict_payload(resp):
                 if "Object is already modified" not in (resp.text or ""):
                     return None
@@ -1534,12 +1537,20 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 except Exception:
                     return None
                 if not isinstance(j, dict): return None
+                # 1) try the documented shape first
                 cn = j.get("consultationNotes") or {}
-                fh = cn.get("notes") or ""
-                fv = cn.get("notesVersion") or ""
-                if fh and fv:
-                    return {"notes": fh, "notesVersion": fv}
-                return None
+                fh = cn.get("notes") or _deep_find(j, "notes") or ""
+                fv = (cn.get("notesVersion")
+                      or _deep_find(j, "notesVersion")
+                      or _deep_find(j, "noteVersion")
+                      or _deep_find(j, "version")
+                      or "")
+                if not fh:
+                    return None
+                if not fv:
+                    # last resort: fresh timestamp (Neo uses ms-epoch-like ints)
+                    fv = str(int(_time.time() * 1000))
+                return {"notes": fh, "notesVersion": fv}
 
             # Try up to 4 times: each time a conflict comes back, re-apply
             # corrections to the latest notes Neo gave us and PUT again.
