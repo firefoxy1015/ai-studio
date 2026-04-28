@@ -1404,7 +1404,8 @@ async def neo_consult_update_s(data: ConsultUpdateS):
             # XSRF token is set by Neo as a cookie at login
             xsrf = (client.cookies.get("XSRF-TOKEN")
                     or client.cookies.get("csrf_neo_cookie") or "")
-            api = f"{NEO_BASE}/consultations/{cid}/notes"
+            get_api = f"{NEO_BASE}/consultations/{cid}/page-data"
+            put_api = f"{NEO_BASE}/consultations/{cid}/notes"
             base_headers = {
                 "X-XSRF-TOKEN":       xsrf,
                 "X-Neo-Core-Version": "126.13.1",
@@ -1414,20 +1415,38 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 "X-Requested-With":   "XMLHttpRequest",
             }
 
-            # 1) Fetch current notes
-            r = await client.get(api, headers=base_headers)
+            # 1) Fetch full consult page-data (notes + version live somewhere inside)
+            r = await client.get(get_api, headers=base_headers)
             if r.status_code != 200:
-                return {"ok": False, "message": f"GET notes failed: {r.status_code}",
+                return {"ok": False, "message": f"GET page-data failed: {r.status_code}",
                         "diagnostic": {"resp": r.text[:400]}}
             try:
                 payload = r.json()
             except Exception:
-                return {"ok": False, "message": "GET notes returned non-JSON",
+                return {"ok": False, "message": "GET page-data returned non-JSON",
                         "diagnostic": {"resp": r.text[:400]}}
-            current_html = payload.get("notes") or ""
-            version      = payload.get("notesVersion") or ""
+
+            # Deep-walk JSON to find the notes HTML + matching version
+            def _deep_find(obj, key):
+                if isinstance(obj, dict):
+                    if key in obj:
+                        return obj[key]
+                    for v in obj.values():
+                        rr = _deep_find(v, key)
+                        if rr is not None:
+                            return rr
+                elif isinstance(obj, list):
+                    for v in obj:
+                        rr = _deep_find(v, key)
+                        if rr is not None:
+                            return rr
+                return None
+
+            current_html = _deep_find(payload, "notes") or ""
+            version      = _deep_find(payload, "notesVersion") or ""
             if not current_html:
-                return {"ok": False, "message": "current notes are empty"}
+                return {"ok": False, "message": "no notes field found in page-data",
+                        "diagnostic": {"top_keys": list(payload.keys()) if isinstance(payload, dict) else "non-dict"}}
 
             # 2) Locate the S td using html.parser (no wrappers added)
             soup = BeautifulSoup(current_html, "html.parser")
@@ -1467,7 +1486,7 @@ async def neo_consult_update_s(data: ConsultUpdateS):
 
             # 4) PUT back
             put = await client.put(
-                api,
+                put_api,
                 headers={**base_headers, "Content-Type": "application/json"},
                 json={"notes": new_full_html, "notesVersion": version},
             )
