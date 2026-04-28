@@ -1375,125 +1375,107 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
 
 
 class ConsultUpdateS(BaseModel):
-    pid: str
+    pid: str = ""
     consult_id: str
-    original_s: str
-    corrected_s: str
+    original_s: str = ""
+    corrected_s: str = ""
+    corrections: list[dict] = []   # [{original, corrected, context}]
 
 @app.post("/api/neo-consult-update-s")
 async def neo_consult_update_s(data: ConsultUpdateS):
     """Update only the S (Subjective) section of a consult's notes.
-    First-pass: probe Neo for the consult-edit endpoint, attempt save,
-    return detailed diagnostic on failure so we can iterate.
+
+    Flow:
+      1. GET  /consultations/{cid}/notes  → {notes: HTML, notesVersion: "..."}
+      2. Parse HTML, locate the <td> that follows <strong>S = Subjective Information</strong>
+      3. Apply each {original→corrected} word-boundary replacement INSIDE that td only
+      4. PUT /consultations/{cid}/notes with {notes: modified_html, notesVersion: same}
     """
     if not data.consult_id:
         raise HTTPException(400, "consult_id required")
+    if not data.corrections:
+        return {"ok": False, "message": "no corrections to apply"}
+    cid = data.consult_id
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
             if not await _neo_login(client):
                 raise HTTPException(503, "neo auth failed")
 
-            diagnostic = {"tried": [], "consult_id": data.consult_id, "edit_hooks": []}
-            cid = data.consult_id
-
-            # Probe a wider set of AJAX modal/edit/note endpoints
-            candidates = [
-                f"{NEO_BASE}/ajax/output/?page=modals/soap&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=modals/soap_notes&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=modals/consultation_notes&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=consultations/edit&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=consultations/notes&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=notes/edit&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=notes/soap&consult_id={cid}",
-                f"{NEO_BASE}/ajax/output/?page=modals/edit_notes&consult_id={cid}",
-                f"{NEO_BASE}/consultations/view/{cid}",
-            ]
-            promising = []  # (url, html) where status=200 and contains a textarea
-            for url in candidates:
-                try:
-                    r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
-                    info = {"url": url, "status": r.status_code, "len": len(r.text)}
-                    if r.status_code == 200 and "<textarea" in r.text.lower():
-                        info["has_textarea"] = True
-                        promising.append((url, r.text))
-                    diagnostic["tried"].append(info)
-                except Exception as e:
-                    diagnostic["tried"].append({"url": url, "err": str(e)})
-
-            # ALSO scan the patient_history modal HTML — the listing should contain
-            # an "Edit Notes" link/data-href that points at the right edit endpoint.
-            try:
-                pid = data.pid
-                if pid:
-                    from urllib.parse import quote
-                    from datetime import date as _date, timedelta as _td
-                    frm = (_date.today() - _td(days=365)).strftime("%d-%b %Y")
-                    hist_url = (f"{NEO_BASE}/ajax/output/?page=modals/patient_history"
-                                f"&patient_id={pid}&from={quote(frm)}&to=&include_voided=false")
-                    rh = await client.get(hist_url, headers={"X-Requested-With": "XMLHttpRequest"})
-                    if rh.status_code == 200:
-                        soup_h = BeautifulSoup(rh.text, "lxml")
-                        # 1) Locate the .consultation-list-item that contains #cid
-                        target_item = None
-                        for item in soup_h.select(".consultation-list-item"):
-                            if f"#{cid}" in item.get_text():
-                                target_item = item; break
-                        if target_item is not None:
-                            diagnostic["target_attrs"] = dict(target_item.attrs)
-                            # dump every descendant element with any data-* / href / onclick
-                            inner = []
-                            for el in target_item.find_all(True):
-                                attrs = el.attrs or {}
-                                interesting = {}
-                                for k, v in attrs.items():
-                                    if k.startswith("data-") or k in ("href","onclick","action","id","class"):
-                                        interesting[k] = v
-                                if interesting:
-                                    inner.append({"tag": el.name,
-                                                  "txt": (el.get_text(" ", strip=True) or "")[:50],
-                                                  **interesting})
-                            diagnostic["target_inner"] = inner[:60]
-                        else:
-                            # raw scan for the cid anywhere
-                            hooks = []
-                            for el in soup_h.find_all(True):
-                                attrs = el.attrs or {}
-                                blob = " ".join([str(v) for v in attrs.values() if isinstance(v, str)])
-                                if cid in blob:
-                                    hooks.append({"tag": el.name, "attrs": {k:v for k,v in attrs.items() if isinstance(v,str)}})
-                            diagnostic["edit_hooks"] = hooks[:30]
-                            diagnostic["history_html_snippet"] = rh.text[:1500]
-            except Exception as e:
-                diagnostic["edit_hooks_err"] = str(e)
-
-            # If we found any promising HTML with a textarea, dump form info
-            if promising:
-                diagnostic["promising"] = []
-                for url, html in promising[:3]:
-                    soup = BeautifulSoup(html, "lxml")
-                    forms_info = []
-                    for f in soup.find_all("form"):
-                        forms_info.append({
-                            "action": f.get("action", ""),
-                            "method": f.get("method", ""),
-                            "id":     f.get("id", ""),
-                            "inputs": [{"name": i.get("name",""), "type": i.get("type","")} for i in f.find_all(["input","textarea","select"])][:40],
-                        })
-                    ta_match = []
-                    for ta in soup.find_all("textarea"):
-                        txt = ta.get_text() or ""
-                        if data.original_s and data.original_s[:40] in txt:
-                            ta_match.append({"name": ta.get("name",""), "id": ta.get("id",""),
-                                             "form": (ta.find_parent("form").get("id","") if ta.find_parent("form") else "")})
-                    diagnostic["promising"].append({
-                        "url": url, "forms": forms_info[:5], "textarea_matches": ta_match,
-                    })
-
-            return {
-                "ok": False,
-                "message": "Discovery still incomplete — see edit_hooks (links inside the history modal that reference this consult) and promising (any AJAX endpoint that returned a real textarea).",
-                "diagnostic": diagnostic,
+            # XSRF token is set by Neo as a cookie at login
+            xsrf = (client.cookies.get("XSRF-TOKEN")
+                    or client.cookies.get("csrf_neo_cookie") or "")
+            api = f"{NEO_BASE}/consultations/{cid}/notes"
+            base_headers = {
+                "X-XSRF-TOKEN":       xsrf,
+                "X-Neo-Core-Version": "126.13.1",
+                "Accept":             "application/json, text/plain, */*",
+                "Referer":            f"{NEO_BASE}/consultations/view/{cid}",
+                "Origin":             NEO_BASE,
+                "X-Requested-With":   "XMLHttpRequest",
             }
+
+            # 1) Fetch current notes
+            r = await client.get(api, headers=base_headers)
+            if r.status_code != 200:
+                return {"ok": False, "message": f"GET notes failed: {r.status_code}",
+                        "diagnostic": {"resp": r.text[:400]}}
+            try:
+                payload = r.json()
+            except Exception:
+                return {"ok": False, "message": "GET notes returned non-JSON",
+                        "diagnostic": {"resp": r.text[:400]}}
+            current_html = payload.get("notes") or ""
+            version      = payload.get("notesVersion") or ""
+            if not current_html:
+                return {"ok": False, "message": "current notes are empty"}
+
+            # 2) Locate the S td using html.parser (no wrappers added)
+            soup = BeautifulSoup(current_html, "html.parser")
+            s_strong = None
+            for st in soup.find_all("strong"):
+                if "S = Subjective" in st.get_text():
+                    s_strong = st; break
+            if not s_strong:
+                return {"ok": False, "message": "could not locate S = Subjective header in notes"}
+            s_header_tr  = s_strong.find_parent("tr")
+            s_content_tr = s_header_tr.find_next_sibling("tr") if s_header_tr else None
+            s_td = s_content_tr.find("td") if s_content_tr else None
+            if not s_td:
+                return {"ok": False, "message": "could not locate S content td"}
+
+            # 3) Apply word-level corrections WITHIN the S td innerHTML only
+            import re as _re
+            inner = s_td.decode_contents()
+            applied = []
+            for c in data.corrections:
+                orig = (c.get("original") or "").strip()
+                corr = (c.get("corrected") or "").strip()
+                if not orig or not corr or orig == corr:
+                    continue
+                # word-boundary, case-sensitive (medical typos preserve case)
+                pat = _re.compile(r"\b" + _re.escape(orig) + r"\b")
+                inner, n = pat.subn(corr, inner)
+                applied.append({"original": orig, "corrected": corr, "count": n})
+            if not any(a["count"] for a in applied):
+                return {"ok": False, "message": "none of the corrections matched the S text",
+                        "diagnostic": {"applied": applied, "td_preview": s_td.decode_contents()[:400]}}
+
+            # Replace td innerHTML and serialize the FULL notes HTML
+            new_td = BeautifulSoup(f"<td>{inner}</td>", "html.parser").td
+            s_td.replace_with(new_td)
+            new_full_html = str(soup)
+
+            # 4) PUT back
+            put = await client.put(
+                api,
+                headers={**base_headers, "Content-Type": "application/json"},
+                json={"notes": new_full_html, "notesVersion": version},
+            )
+            if put.status_code == 200:
+                return {"ok": True, "applied": applied,
+                        "message": f"saved {sum(a['count'] for a in applied)} edits"}
+            return {"ok": False, "message": f"PUT failed: {put.status_code}",
+                    "diagnostic": {"resp": put.text[:400], "applied": applied}}
     except HTTPException:
         raise
     except Exception as e:
