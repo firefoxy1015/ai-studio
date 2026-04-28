@@ -1393,57 +1393,88 @@ async def neo_consult_update_s(data: ConsultUpdateS):
             if not await _neo_login(client):
                 raise HTTPException(503, "neo auth failed")
 
-            diagnostic = {"tried": [], "consult_id": data.consult_id}
+            diagnostic = {"tried": [], "consult_id": data.consult_id, "edit_hooks": []}
+            cid = data.consult_id
 
-            # Try common Neo consult-view endpoints to find the notes-edit hook.
+            # Probe a wider set of AJAX modal/edit/note endpoints
             candidates = [
-                f"{NEO_BASE}/consultations/view/{data.consult_id}",
-                f"{NEO_BASE}/consultations/edit/{data.consult_id}",
-                f"{NEO_BASE}/ajax/output/?page=consultations/edit&consult_id={data.consult_id}",
-                f"{NEO_BASE}/ajax/output/?page=consultations/view&consult_id={data.consult_id}",
+                f"{NEO_BASE}/ajax/output/?page=modals/soap&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=modals/soap_notes&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=modals/consultation_notes&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=consultations/edit&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=consultations/notes&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=notes/edit&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=notes/soap&consult_id={cid}",
+                f"{NEO_BASE}/ajax/output/?page=modals/edit_notes&consult_id={cid}",
+                f"{NEO_BASE}/consultations/view/{cid}",
             ]
-            page_html = None
-            page_url  = None
+            promising = []  # (url, html) where status=200 and contains a textarea
             for url in candidates:
                 try:
                     r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
-                    diagnostic["tried"].append({"url": url, "status": r.status_code, "len": len(r.text)})
-                    if r.status_code == 200 and len(r.text) > 500:
-                        page_html = r.text
-                        page_url  = url
-                        break
+                    info = {"url": url, "status": r.status_code, "len": len(r.text)}
+                    if r.status_code == 200 and "<textarea" in r.text.lower():
+                        info["has_textarea"] = True
+                        promising.append((url, r.text))
+                    diagnostic["tried"].append(info)
                 except Exception as e:
                     diagnostic["tried"].append({"url": url, "err": str(e)})
 
-            if not page_html:
-                return {"ok": False, "message": "Could not fetch consult page",
-                        "diagnostic": diagnostic}
+            # ALSO scan the patient_history modal HTML — the listing should contain
+            # an "Edit Notes" link/data-href that points at the right edit endpoint.
+            try:
+                pid = data.pid
+                if pid:
+                    from urllib.parse import quote
+                    from datetime import date as _date, timedelta as _td
+                    frm = (_date.today() - _td(days=365)).strftime("%d-%b %Y")
+                    hist_url = (f"{NEO_BASE}/ajax/output/?page=modals/patient_history"
+                                f"&patient_id={pid}&from={quote(frm)}&to=&include_voided=false")
+                    rh = await client.get(hist_url, headers={"X-Requested-With": "XMLHttpRequest"})
+                    if rh.status_code == 200:
+                        soup_h = BeautifulSoup(rh.text, "lxml")
+                        # find anchors/buttons mentioning this consult_id
+                        hooks = []
+                        for el in soup_h.find_all(True):
+                            attrs = el.attrs or {}
+                            blob = " ".join([f"{k}={v}" for k, v in attrs.items() if isinstance(v, str)])
+                            if cid in blob or (el.get_text() and cid in el.get_text()):
+                                interesting = {k: attrs.get(k) for k in
+                                              ["href","data-href","data-url","data-action",
+                                               "data-target","onclick","data-page","data-modal"]
+                                              if attrs.get(k)}
+                                if interesting:
+                                    hooks.append({"tag": el.name, "txt": (el.get_text(" ", strip=True) or "")[:60], **interesting})
+                        diagnostic["edit_hooks"] = hooks[:30]
+            except Exception as e:
+                diagnostic["edit_hooks_err"] = str(e)
 
-            # Inspect the form to find action URL + textarea for notes
-            soup = BeautifulSoup(page_html, "lxml")
-            forms_info = []
-            for f in soup.find_all("form"):
-                forms_info.append({
-                    "action": f.get("action", ""),
-                    "method": f.get("method", ""),
-                    "id":     f.get("id", ""),
-                    "inputs": [{"name": i.get("name",""), "type": i.get("type","")} for i in f.find_all(["input","textarea","select"])][:30],
-                })
-            diagnostic["page_url"] = page_url
-            diagnostic["forms"]    = forms_info[:5]
-            # Look for textareas containing the original S text
-            ta_match = []
-            for ta in soup.find_all("textarea"):
-                txt = ta.get_text() or ""
-                if data.original_s and data.original_s[:40] in txt:
-                    ta_match.append({"name": ta.get("name",""), "id": ta.get("id",""),
-                                     "form": (ta.find_parent("form").get("id","") if ta.find_parent("form") else "")})
-            diagnostic["textarea_matches"] = ta_match
+            # If we found any promising HTML with a textarea, dump form info
+            if promising:
+                diagnostic["promising"] = []
+                for url, html in promising[:3]:
+                    soup = BeautifulSoup(html, "lxml")
+                    forms_info = []
+                    for f in soup.find_all("form"):
+                        forms_info.append({
+                            "action": f.get("action", ""),
+                            "method": f.get("method", ""),
+                            "id":     f.get("id", ""),
+                            "inputs": [{"name": i.get("name",""), "type": i.get("type","")} for i in f.find_all(["input","textarea","select"])][:40],
+                        })
+                    ta_match = []
+                    for ta in soup.find_all("textarea"):
+                        txt = ta.get_text() or ""
+                        if data.original_s and data.original_s[:40] in txt:
+                            ta_match.append({"name": ta.get("name",""), "id": ta.get("id",""),
+                                             "form": (ta.find_parent("form").get("id","") if ta.find_parent("form") else "")})
+                    diagnostic["promising"].append({
+                        "url": url, "forms": forms_info[:5], "textarea_matches": ta_match,
+                    })
 
-            # Save not yet wired — return diagnostics so we can pinpoint the right endpoint.
             return {
                 "ok": False,
-                "message": "Save endpoint not yet identified — diagnostics below; please share so we can wire the actual save call.",
+                "message": "Discovery still incomplete — see edit_hooks (links inside the history modal that reference this consult) and promising (any AJAX endpoint that returned a real textarea).",
                 "diagnostic": diagnostic,
             }
     except HTTPException:
