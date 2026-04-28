@@ -1484,13 +1484,76 @@ async def neo_consult_update_s(data: ConsultUpdateS):
             s_td.replace_with(new_td)
             new_full_html = str(soup)
 
-            # 4) PUT back
-            put = await client.put(
-                put_api,
-                headers={**base_headers, "Content-Type": "application/json"},
-                json={"notes": new_full_html, "notesVersion": version},
-            )
+            # 4) PUT back — with auto-retry on stale-version conflict.
+            #    On conflict Neo returns 200/4xx with body
+            #      {"message":"Object is already modified",
+            #       "consultationNotes":{"notes":"...","notesVersion":"..."}}
+            #    We re-apply the same corrections to the freshly-returned notes
+            #    HTML and PUT once more.
+            async def _do_put(html_to_save, ver):
+                return await client.put(
+                    put_api,
+                    headers={**base_headers, "Content-Type": "application/json"},
+                    json={"notes": html_to_save, "notesVersion": ver},
+                )
+
+            def _apply_corrections_to_full_html(full_html):
+                soup2 = BeautifulSoup(full_html, "html.parser")
+                strong2 = None
+                for st in soup2.find_all("strong"):
+                    if "S = Subjective" in st.get_text():
+                        strong2 = st; break
+                if not strong2:
+                    return None, None, "could not locate S header on retry"
+                tr1 = strong2.find_parent("tr")
+                tr2 = tr1.find_next_sibling("tr") if tr1 else None
+                td2 = tr2.find("td") if tr2 else None
+                if not td2:
+                    return None, None, "could not locate S td on retry"
+                inner2 = td2.decode_contents()
+                applied2 = []
+                for c in data.corrections:
+                    o = (c.get("original") or "").strip()
+                    cc = (c.get("corrected") or "").strip()
+                    if not o or not cc or o == cc: continue
+                    p = _re.compile(r"\b" + _re.escape(o) + r"\b")
+                    inner2, n = p.subn(cc, inner2)
+                    applied2.append({"original": o, "corrected": cc, "count": n})
+                if not any(a["count"] for a in applied2):
+                    return None, None, "no corrections matched on retry"
+                new_td2 = BeautifulSoup(f"<td>{inner2}</td>", "html.parser").td
+                td2.replace_with(new_td2)
+                return str(soup2), applied2, None
+
+            put = await _do_put(new_full_html, version)
             if put.status_code == 200:
+                # Even a 200 can be the "Object is already modified" body
+                try:
+                    pj = put.json()
+                except Exception:
+                    pj = {}
+                if isinstance(pj, dict) and pj.get("message") == "Object is already modified":
+                    fresh = pj.get("consultationNotes") or {}
+                    fresh_html = fresh.get("notes") or ""
+                    fresh_ver  = fresh.get("notesVersion") or ""
+                    if fresh_html and fresh_ver:
+                        retry_html, retry_applied, err = _apply_corrections_to_full_html(fresh_html)
+                        if err:
+                            return {"ok": False, "message": f"retry parse failed: {err}",
+                                    "diagnostic": {"applied": applied}}
+                        put2 = await _do_put(retry_html, fresh_ver)
+                        if put2.status_code == 200:
+                            try: pj2 = put2.json()
+                            except Exception: pj2 = {}
+                            if isinstance(pj2, dict) and pj2.get("message") == "Object is already modified":
+                                return {"ok": False, "message": "still conflicting after retry",
+                                        "diagnostic": {"resp": put2.text[:400]}}
+                            return {"ok": True, "applied": retry_applied,
+                                    "message": f"saved {sum(a['count'] for a in retry_applied)} edits (after refresh)"}
+                        return {"ok": False, "message": f"retry PUT failed: {put2.status_code}",
+                                "diagnostic": {"resp": put2.text[:400]}}
+                    return {"ok": False, "message": "version conflict and no fresh data returned",
+                            "diagnostic": {"resp": put.text[:400]}}
                 return {"ok": True, "applied": applied,
                         "message": f"saved {sum(a['count'] for a in applied)} edits"}
             return {"ok": False, "message": f"PUT failed: {put.status_code}",
