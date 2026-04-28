@@ -1085,6 +1085,59 @@ def _age_from_dob(dob: str) -> str:
         return ""
 
 
+async def _neo_login(client: httpx.AsyncClient) -> bool:
+    """POST login to IDEXX Neo. Returns True on success."""
+    if not NEO_USER or not NEO_PASS:
+        return False
+    login_page = await client.get(f"{NEO_BASE}/login/")
+    lsoup = BeautifulSoup(login_page.text, "lxml")
+    csrf_token = (lsoup.find("input", {"name": "csrf_neo_token"}) or {}).get("value", "")
+    se_token   = (lsoup.find("input", {"name": "se_login_request"}) or {}).get("value", "")
+    login = await client.post(f"{NEO_BASE}/login", data={
+        "company_id": NEO_COMPANY, "username": NEO_USER,
+        "password": NEO_PASS, "submitted": "TRUE",
+        "csrf_neo_token": csrf_token, "se_login_request": se_token,
+    }, headers={"Referer": f"{NEO_BASE}/login/"})
+    return "/login" not in str(login.url)
+
+
+async def _fetch_patient_history(client: httpx.AsyncClient, pid: str, days: int = 365) -> list[dict]:
+    """Fetch /ajax/output/?page=modals/patient_history and parse consult entries."""
+    from urllib.parse import quote
+    from datetime import date as _date, timedelta as _td
+    frm = (_date.today() - _td(days=days)).strftime("%d-%b %Y")
+    url = (f"{NEO_BASE}/ajax/output/?page=modals/patient_history"
+           f"&patient_id={pid}&from={quote(frm)}&to=&include_voided=false")
+    r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+    if r.status_code != 200:
+        return []
+    soup = BeautifulSoup(r.text, "lxml")
+    consults = []
+    # Each consultation is in .consultation-list-item
+    for item in soup.select(".consultation-list-item"):
+        # Date + provider in the header
+        header_txt = item.select_one(".consultation-list-item-header")
+        header_str = header_txt.get_text(" ", strip=True) if header_txt else ""
+        # Title / description
+        title_el = item.select_one(".consultation-title, .consultation-list-item-description-row")
+        title = title_el.get_text(" ", strip=True) if title_el else ""
+        # Vitals (weight etc)
+        vitals_el = item.select_one(".consultation-list-item-vitals")
+        vitals = vitals_el.get_text(" ", strip=True) if vitals_el else ""
+        # Full notes / body — strip prices (anything with $ that's not in notes)
+        body = item.get_text("\n", strip=True)
+        # Compress whitespace
+        import re as _re
+        body = _re.sub(r"\n{2,}", "\n", body)
+        consults.append({
+            "header":  header_str[:200],
+            "title":   title[:200],
+            "vitals":  vitals[:120],
+            "body":    body[:3000],   # cap each consult to 3KB
+        })
+    return consults
+
+
 async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
     """Fetch /patients/view/{pid} and extract embedded JSON patient fields."""
     out = {"species": "", "breed": "", "sex": "", "weight": "",
@@ -1131,21 +1184,7 @@ async def scrape_neo_schedule():
     print(f"[neo] scraping {date_str}")
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            # 1. GET login page — extract form tokens
-            login_page = await client.get(f"{NEO_BASE}/login/")
-            lsoup = BeautifulSoup(login_page.text, "lxml")
-            csrf_token = (lsoup.find("input", {"name": "csrf_neo_token"}) or {}).get("value", "")
-            se_token   = (lsoup.find("input", {"name": "se_login_request"}) or {}).get("value", "")
-            print(f"[neo] login page csrf={'ok' if csrf_token else 'missing'}")
-
-            # 2. POST login
-            login = await client.post(f"{NEO_BASE}/login", data={
-                "company_id": NEO_COMPANY, "username": NEO_USER,
-                "password": NEO_PASS, "submitted": "TRUE",
-                "csrf_neo_token": csrf_token, "se_login_request": se_token,
-            }, headers={"Referer": f"{NEO_BASE}/login/"})
-            print(f"[neo] login → {str(login.url)[:60]}")
-            if "/login" in str(login.url):
+            if not await _neo_login(client):
                 print("[neo] auth failed"); return
 
             # 3. Call calendar JSON API directly
@@ -1237,6 +1276,29 @@ async def refresh_neo_schedule():
     """Manually trigger a schedule scrape."""
     asyncio.create_task(scrape_neo_schedule())
     return {"ok": True, "message": "scrape triggered"}
+
+
+_neo_history_cache: dict = {}  # { pid: {"at": ts, "consults": [...]} }
+
+@app.get("/api/neo-history")
+async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
+    """Fetch and cache a patient's clinical history. Cached for 30 min per pid."""
+    import time
+    now = time.time()
+    cached = _neo_history_cache.get(pid)
+    if cached and not refresh and (now - cached["at"]) < 1800:
+        return {"pid": pid, "cached": True, "consults": cached["consults"]}
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+            if not await _neo_login(client):
+                raise HTTPException(503, "neo auth failed")
+            consults = await _fetch_patient_history(client, pid, days)
+            _neo_history_cache[pid] = {"at": now, "consults": consults}
+            return {"pid": pid, "cached": False, "consults": consults}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"history fetch failed: {e}")
 
 
 if __name__ == "__main__":
