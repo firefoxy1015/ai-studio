@@ -1138,6 +1138,34 @@ async def _fetch_patient_history(client: httpx.AsyncClient, pid: str, days: int 
     return consults
 
 
+async def _fetch_patient_rx(client: httpx.AsyncClient, pid: str) -> list[dict]:
+    """Fetch /shared/prescriptions/list — returns simplified med list."""
+    url = (f"{NEO_BASE}/shared/prescriptions/list"
+           f"?patient_id={pid}&draw=1&start=0&length=50&include_voided=false")
+    r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+    if r.status_code != 200:
+        return []
+    try:
+        rows = r.json()
+    except Exception:
+        return []
+    meds = []
+    for row in rows:
+        rx = row.get("prescription", row) if isinstance(row, dict) else {}
+        if not rx or rx.get("voidedAt"): continue
+        meds.append({
+            "name":          rx.get("productName", ""),
+            "rx_id":         str(rx.get("rxId", "")),
+            "provider":      (rx.get("provider") or {}).get("name", ""),
+            "instructions":  rx.get("instructions", ""),
+            "quantity":      rx.get("quantity", ""),
+            "refills":       rx.get("totalRefills", 0),
+            "refills_left":  rx.get("refillsRemaining"),
+            "filled_at":     (rx.get("filledAt") or "")[:10],
+        })
+    return meds
+
+
 async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
     """Fetch /patients/view/{pid} and extract embedded JSON patient fields."""
     out = {"species": "", "breed": "", "sex": "", "weight": "",
@@ -1282,19 +1310,24 @@ _neo_history_cache: dict = {}  # { pid: {"at": ts, "consults": [...]} }
 
 @app.get("/api/neo-history")
 async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
-    """Fetch and cache a patient's clinical history. Cached for 30 min per pid."""
+    """Fetch and cache a patient's clinical history + active medications.
+    Cached for 30 min per pid."""
     import time
     now = time.time()
     cached = _neo_history_cache.get(pid)
     if cached and not refresh and (now - cached["at"]) < 1800:
-        return {"pid": pid, "cached": True, "consults": cached["consults"]}
+        return {"pid": pid, "cached": True,
+                "consults": cached["consults"],
+                "medications": cached.get("medications", [])}
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
             if not await _neo_login(client):
                 raise HTTPException(503, "neo auth failed")
             consults = await _fetch_patient_history(client, pid, days)
-            _neo_history_cache[pid] = {"at": now, "consults": consults}
-            return {"pid": pid, "cached": False, "consults": consults}
+            meds     = await _fetch_patient_rx(client, pid)
+            _neo_history_cache[pid] = {"at": now, "consults": consults, "medications": meds}
+            return {"pid": pid, "cached": False,
+                    "consults": consults, "medications": meds}
     except HTTPException:
         raise
     except Exception as e:
