@@ -1128,16 +1128,35 @@ async def _fetch_patient_history(client: httpx.AsyncClient, pid: str, days: int 
         # Vitals (weight etc)
         vitals_el = item.select_one(".consultation-list-item-vitals")
         vitals = vitals_el.get_text(" ", strip=True) if vitals_el else ""
-        # Full notes / body — strip prices (anything with $ that's not in notes)
-        body = item.get_text("\n", strip=True)
-        # Compress whitespace
+        # Body — extract ONLY the clinical "Notes" section, drop billing/Qty table
         import re as _re
-        body = _re.sub(r"\n{2,}", "\n", body)
+        raw = item.get_text("\n", strip=True)
+        raw = _re.sub(r"\n{2,}", "\n", raw)
+        # 1) cut from after the Notes header
+        m = _re.search(r"(?:^|\n)Notes\n", raw)
+        body = raw[m.end():] if m else raw
+        # 2) cut at the start of the billing/products table
+        bt = _re.search(r"\n(?:Qty|Product / Service|Total)\n", body)
+        if bt:
+            body = body[:bt.start()]
+        # 3) drop residual billing-style lines
+        keep = []
+        for ln in body.split("\n"):
+            s = ln.strip()
+            if not s: continue
+            if _re.match(r"^\$[\d,.]+$", s): continue                     # $124.64
+            if s.startswith(("Batch No:", "Rx ID:", "(Includes ")): continue
+            if s in ("Paid", "Unpaid", "View", "Staff", "Provider"): continue
+            if _re.match(r"^#\d+$", s): continue                          # invoice no
+            if _re.match(r"^\d{1,3}\.\d{2}$", s) and len(keep) > 0:        # bare price
+                continue
+            keep.append(s)
+        body = "\n".join(keep).strip()
         consults.append({
             "header":  header_str[:200],
             "title":   title[:200],
             "vitals":  vitals[:120],
-            "body":    body[:3000],   # cap each consult to 3KB
+            "body":    body[:2500],   # cap each consult
         })
     return consults
 
