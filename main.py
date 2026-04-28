@@ -1433,19 +1433,36 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                     rh = await client.get(hist_url, headers={"X-Requested-With": "XMLHttpRequest"})
                     if rh.status_code == 200:
                         soup_h = BeautifulSoup(rh.text, "lxml")
-                        # find anchors/buttons mentioning this consult_id
-                        hooks = []
-                        for el in soup_h.find_all(True):
-                            attrs = el.attrs or {}
-                            blob = " ".join([f"{k}={v}" for k, v in attrs.items() if isinstance(v, str)])
-                            if cid in blob or (el.get_text() and cid in el.get_text()):
-                                interesting = {k: attrs.get(k) for k in
-                                              ["href","data-href","data-url","data-action",
-                                               "data-target","onclick","data-page","data-modal"]
-                                              if attrs.get(k)}
+                        # 1) Locate the .consultation-list-item that contains #cid
+                        target_item = None
+                        for item in soup_h.select(".consultation-list-item"):
+                            if f"#{cid}" in item.get_text():
+                                target_item = item; break
+                        if target_item is not None:
+                            diagnostic["target_attrs"] = dict(target_item.attrs)
+                            # dump every descendant element with any data-* / href / onclick
+                            inner = []
+                            for el in target_item.find_all(True):
+                                attrs = el.attrs or {}
+                                interesting = {}
+                                for k, v in attrs.items():
+                                    if k.startswith("data-") or k in ("href","onclick","action","id","class"):
+                                        interesting[k] = v
                                 if interesting:
-                                    hooks.append({"tag": el.name, "txt": (el.get_text(" ", strip=True) or "")[:60], **interesting})
-                        diagnostic["edit_hooks"] = hooks[:30]
+                                    inner.append({"tag": el.name,
+                                                  "txt": (el.get_text(" ", strip=True) or "")[:50],
+                                                  **interesting})
+                            diagnostic["target_inner"] = inner[:60]
+                        else:
+                            # raw scan for the cid anywhere
+                            hooks = []
+                            for el in soup_h.find_all(True):
+                                attrs = el.attrs or {}
+                                blob = " ".join([str(v) for v in attrs.values() if isinstance(v, str)])
+                                if cid in blob:
+                                    hooks.append({"tag": el.name, "attrs": {k:v for k,v in attrs.items() if isinstance(v,str)}})
+                            diagnostic["edit_hooks"] = hooks[:30]
+                            diagnostic["history_html_snippet"] = rh.text[:1500]
             except Exception as e:
                 diagnostic["edit_hooks_err"] = str(e)
 
