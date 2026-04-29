@@ -1051,7 +1051,7 @@ async def save_neo_schedule(data: NeoScheduleData):
     return {"ok": True, "date": data.date, "count": len(data.appointments)}
 
 @app.get("/api/neo-schedule")
-async def get_neo_schedule(date: str = ""):
+async def get_neo_schedule(date: str = "", refresh: bool = False):
     if not date:
         from datetime import datetime
         try:
@@ -1059,6 +1059,12 @@ async def get_neo_schedule(date: str = ""):
             date = datetime.now(ZoneInfo("America/Vancouver")).strftime("%Y-%m-%d")
         except Exception:
             date = datetime.now().strftime("%Y-%m-%d")
+    # On-demand fetch when nothing is cached for this date (or when forced)
+    if refresh or date not in _neo_schedule:
+        try:
+            await scrape_neo_schedule(date_str=date)
+        except Exception as e:
+            print(f"[neo] on-demand scrape failed for {date}: {e}")
     return {"date": date, "appointments": _neo_schedule.get(date, [])}
 
 
@@ -1238,17 +1244,21 @@ async def _fetch_patient_detail(client: httpx.AsyncClient, pid: str) -> dict:
         return out
 
 
-async def scrape_neo_schedule():
-    """Login to IDEXX Neo and fetch today's schedule via the calendar API."""
+async def scrape_neo_schedule(date_str: str | None = None):
+    """Login to IDEXX Neo and fetch a given date's schedule via the calendar API.
+
+    If `date_str` is None, defaults to today (Vancouver local date).
+    """
     if not NEO_USER or not NEO_PASS:
         print("[neo] NEO_USER/NEO_PASS not set, skipping")
         return
     # Use Vancouver local date (clinic timezone), not server UTC
-    try:
-        from zoneinfo import ZoneInfo
-        date_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%Y-%m-%d")
-    except Exception:
-        date_str = datetime.now().strftime("%Y-%m-%d")
+    if not date_str:
+        try:
+            from zoneinfo import ZoneInfo
+            date_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%Y-%m-%d")
+        except Exception:
+            date_str = datetime.now().strftime("%Y-%m-%d")
     print(f"[neo] scraping {date_str}")
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
