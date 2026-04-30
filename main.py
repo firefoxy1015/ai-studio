@@ -1293,6 +1293,15 @@ async def scrape_neo_schedule(date_str: str | None = None):
                 except Exception:
                     time_fmt = start[11:16]
                 notes = (ev.get("reason") or ev.get("popup_title_text") or "")
+                # Strip notes that are just the provider/doctor name (no real chief complaint).
+                # e.g. "Chang-Chi Chiu, DVM" or "Dr. Rex Yang" leaking into the reason field.
+                _notes_clean = (notes or "").strip()
+                _provider = (ev.get("provider") or "").strip()
+                if _notes_clean and (
+                    _notes_clean == _provider
+                    or re.match(r"^(Dr\.?\s+[A-Z][\w\-]+(\s+[A-Z][\w\-]+)*|[A-Z][\w\-]+(\s+[A-Z][\w\-]+){0,3},?\s*DVM)\.?$", _notes_clean)
+                ):
+                    notes = ""
                 pid = (ev.get("patient_id") or ev.get("patientId")
                        or ev.get("patient") or ev.get("pet_id") or "")
                 appts.append({
