@@ -1358,11 +1358,39 @@ async def refresh_neo_schedule():
 
 _neo_history_cache: dict = {}  # { pid: {"at": ts, "consults": [...]} }
 
+# Persistent logged-in Neo session — reused across requests so we skip
+# the (slow) login handshake every time. Re-login is done lazily if a
+# request returns 401/redirects to /login.
+_neo_session: dict = {"client": None, "login_lock": None}
+
+async def _get_neo_session() -> httpx.AsyncClient:
+    """Return a logged-in httpx client, logging in once and reusing it."""
+    import asyncio as _asyncio
+    if _neo_session["login_lock"] is None:
+        _neo_session["login_lock"] = _asyncio.Lock()
+    async with _neo_session["login_lock"]:
+        c = _neo_session["client"]
+        if c is None:
+            c = httpx.AsyncClient(follow_redirects=True, timeout=20)
+            if not await _neo_login(c):
+                await c.aclose()
+                _neo_session["client"] = None
+                raise HTTPException(503, "neo auth failed")
+            _neo_session["client"] = c
+        return c
+
+async def _ensure_neo_authed(client: httpx.AsyncClient) -> bool:
+    """If a probe shows the session has expired, re-login in place."""
+    probe = await client.get(f"{NEO_BASE}/", timeout=10)
+    if "/login" in str(probe.url):
+        return await _neo_login(client)
+    return True
+
 @app.get("/api/neo-history")
 async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
     """Fetch and cache a patient's clinical history + active medications.
-    Cached for 30 min per pid."""
-    import time
+    Cached for 30 min per pid (refresh=true bypasses cache)."""
+    import time, asyncio as _asyncio
     now = time.time()
     cached = _neo_history_cache.get(pid)
     if cached and not refresh and (now - cached["at"]) < 1800:
@@ -1370,14 +1398,27 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
                 "consults": cached["consults"],
                 "medications": cached.get("medications", [])}
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            if not await _neo_login(client):
-                raise HTTPException(503, "neo auth failed")
-            consults = await _fetch_patient_history(client, pid, days)
-            meds     = await _fetch_patient_rx(client, pid)
-            _neo_history_cache[pid] = {"at": now, "consults": consults, "medications": meds}
-            return {"pid": pid, "cached": False,
-                    "consults": consults, "medications": meds}
+        client = await _get_neo_session()
+        # Run history + rx in PARALLEL (was sequential — biggest speedup)
+        try:
+            consults, meds = await _asyncio.gather(
+                _fetch_patient_history(client, pid, days),
+                _fetch_patient_rx(client, pid),
+            )
+        except Exception:
+            # Session may have expired — re-login once and retry
+            if await _neo_login(client):
+                consults, meds = await _asyncio.gather(
+                    _fetch_patient_history(client, pid, days),
+                    _fetch_patient_rx(client, pid),
+                )
+            else:
+                # Drop stale session so next call gets a fresh one
+                _neo_session["client"] = None
+                raise
+        _neo_history_cache[pid] = {"at": now, "consults": consults, "medications": meds}
+        return {"pid": pid, "cached": False,
+                "consults": consults, "medications": meds}
     except HTTPException:
         raise
     except Exception as e:
