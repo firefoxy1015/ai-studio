@@ -1095,6 +1095,60 @@ def _age_from_dob(dob: str) -> str:
         return ""
 
 
+# ─────────────────────────────────────────────────────────────────────────
+#  Vet-intake-tool gate: verify a user-supplied IDEXX login by actually
+#  POSTing to Neo. Returns a 30-day session token the frontend stores in
+#  localStorage so users only re-auth once a month.
+# ─────────────────────────────────────────────────────────────────────────
+import hmac as _hmac, hashlib as _hashlib, base64 as _base64, time as _time
+_AUTH_SECRET = os.environ.get("VET_AUTH_SECRET") or (NEO_PASS + "::vet-gate")
+
+def _sign_token(username: str, expires_ts: int) -> str:
+    msg = f"{username}|{expires_ts}".encode()
+    sig = _hmac.new(_AUTH_SECRET.encode(), msg, _hashlib.sha256).digest()
+    return _base64.urlsafe_b64encode(msg + b"::" + sig).decode().rstrip("=")
+
+def _verify_token(token: str) -> bool:
+    try:
+        pad = "=" * (-len(token) % 4)
+        raw = _base64.urlsafe_b64decode(token + pad)
+        msg, sig = raw.rsplit(b"::", 1)
+        expect = _hmac.new(_AUTH_SECRET.encode(), msg, _hashlib.sha256).digest()
+        if not _hmac.compare_digest(sig, expect):
+            return False
+        _, exp = msg.decode().split("|")
+        return int(exp) > int(_time.time())
+    except Exception:
+        return False
+
+class VetLoginReq(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/vet-verify-login")
+async def vet_verify_login(req: VetLoginReq):
+    """Verify by actually attempting a Neo login with user's credentials."""
+    if not req.username or not req.password:
+        return {"ok": False, "message": "用户名和密码必填"}
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        try:
+            login_page = await client.get(f"{NEO_BASE}/login/")
+            lsoup = BeautifulSoup(login_page.text, "lxml")
+            csrf_token = (lsoup.find("input", {"name": "csrf_neo_token"}) or {}).get("value", "")
+            se_token   = (lsoup.find("input", {"name": "se_login_request"}) or {}).get("value", "")
+            login = await client.post(f"{NEO_BASE}/login", data={
+                "company_id": NEO_COMPANY, "username": req.username,
+                "password": req.password, "submitted": "TRUE",
+                "csrf_neo_token": csrf_token, "se_login_request": se_token,
+            }, headers={"Referer": f"{NEO_BASE}/login/"})
+            if "/login" in str(login.url):
+                return {"ok": False, "message": "用户名或密码错误"}
+        except Exception as e:
+            return {"ok": False, "message": f"验证失败：{e}"}
+    expires = int(_time.time()) + 30 * 86400
+    return {"ok": True, "token": _sign_token(req.username, expires), "expires": expires}
+
+
 async def _neo_login(client: httpx.AsyncClient) -> bool:
     """POST login to IDEXX Neo. Returns True on success."""
     if not NEO_USER or not NEO_PASS:
