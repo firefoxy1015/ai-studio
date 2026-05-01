@@ -1165,6 +1165,20 @@ async def _neo_login(client: httpx.AsyncClient) -> bool:
     return "/login" not in str(login.url)
 
 
+class NeoAuthExpired(Exception):
+    """Raised when a Neo response looks like the login page (session expired)."""
+    pass
+
+def _looks_like_login_page(body: str, final_url: str) -> bool:
+    if "/login" in (final_url or ""):
+        return True
+    head = (body or "")[:3000].lower()
+    # Login page contains a password input AND a username/csrf field; real history
+    # responses contain neither.
+    return ("type=\"password\"" in head or "type='password'" in head) and (
+        "csrf_neo_token" in head or "se_login_request" in head or "name=\"username\"" in head
+    )
+
 async def _fetch_patient_history(client: httpx.AsyncClient, pid: str, days: int = 365) -> list[dict]:
     """Fetch /ajax/output/?page=modals/patient_history and parse consult entries."""
     from urllib.parse import quote
@@ -1175,6 +1189,8 @@ async def _fetch_patient_history(client: httpx.AsyncClient, pid: str, days: int 
     r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
     if r.status_code != 200:
         return []
+    if _looks_like_login_page(r.text, str(r.url)):
+        raise NeoAuthExpired("history endpoint returned login page")
     soup = BeautifulSoup(r.text, "lxml")
     consults = []
     # Each consultation is in .consultation-list-item
@@ -1232,9 +1248,14 @@ async def _fetch_patient_rx(client: httpx.AsyncClient, pid: str) -> list[dict]:
     r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
     if r.status_code != 200:
         return []
+    if _looks_like_login_page(r.text, str(r.url)):
+        raise NeoAuthExpired("rx endpoint returned login page")
     try:
         rows = r.json()
     except Exception:
+        # Non-JSON response on a normally-JSON endpoint also indicates auth issue
+        if "<html" in (r.text or "").lower()[:200]:
+            raise NeoAuthExpired("rx endpoint returned HTML instead of JSON")
         return []
     from datetime import date as _date, timedelta as _td
     cutoff = (_date.today() - _td(days=365)).isoformat()
@@ -1479,7 +1500,10 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
                 # Drop stale session so next call gets a fresh one
                 _neo_session["client"] = None
                 raise
-        _neo_history_cache[pid] = {"at": now, "consults": consults, "medications": meds}
+        # Don't cache fully-empty results — they almost always indicate a transient
+        # auth/parse failure and we don't want to lock the user out for 30 min.
+        if consults or meds:
+            _neo_history_cache[pid] = {"at": now, "consults": consults, "medications": meds}
         return {"pid": pid, "cached": False,
                 "consults": consults, "medications": meds}
     except HTTPException:
