@@ -1488,6 +1488,45 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
         raise HTTPException(500, f"history fetch failed: {e}")
 
 
+@app.get("/api/neo-history-debug")
+async def neo_history_debug(pid: str, days: int = 365):
+    """Diagnostic: dumps raw URL, status, redirect target, HTML head, and selector counts."""
+    from urllib.parse import quote
+    from datetime import date as _date, timedelta as _td
+    frm = (_date.today() - _td(days=days)).strftime("%d-%b %Y")
+    url = (f"{NEO_BASE}/ajax/output/?page=modals/patient_history"
+           f"&patient_id={pid}&from={quote(frm)}&to=&include_voided=false")
+    try:
+        client = await _get_neo_session()
+        r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+        body = r.text or ""
+        soup = BeautifulSoup(body, "lxml")
+        sels = {
+            ".consultation-list-item": len(soup.select(".consultation-list-item")),
+            "[class*='consultation']": len(soup.select("[class*='consultation']")),
+            ".timeline-item": len(soup.select(".timeline-item")),
+            "tr[data-consultation-id]": len(soup.select("tr[data-consultation-id]")),
+        }
+        # Try to autodetect class names that contain 'consult'
+        classes = set()
+        for el in soup.find_all(class_=True)[:5000]:
+            for c in el.get("class", []):
+                if "consult" in c.lower() or "history" in c.lower() or "timeline" in c.lower():
+                    classes.add(c)
+        return {
+            "url": url,
+            "status": r.status_code,
+            "final_url": str(r.url),
+            "looks_like_login": "/login" in str(r.url) or "<form" in body[:2000].lower() and "password" in body[:2000].lower(),
+            "len": len(body),
+            "selector_counts": sels,
+            "candidate_classes": sorted(classes)[:50],
+            "head": body[:1500],
+        }
+    except Exception as e:
+        return {"error": str(e), "url": url}
+
+
 class ConsultUpdateS(BaseModel):
     pid: str = ""
     consult_id: str
