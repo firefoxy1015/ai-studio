@@ -1544,20 +1544,58 @@ async def neo_consult_update_s(data: ConsultUpdateS):
                 # This guarantees we cannot break style="width:..." attributes
                 # or tag names like <p>, <td>, <tr>, etc.
                 parts = _re.split(r"(<[^>]+>)", zone)  # odd indices = tags
+                # Helper: normalize HTML text for fuzzy matching against AI-supplied
+                # plain-text sentences. Decodes &amp;/&nbsp;/&lt;/&gt;/&quot;,
+                # collapses any whitespace run (incl. NBSP) to a single space.
+                import html as _html
+                def _norm(s):
+                    s = _html.unescape(s or "")
+                    s = s.replace("\u00a0", " ")
+                    s = _re.sub(r"\s+", " ", s)
+                    return s.strip()
+
                 for c in corrections_list:
                     o = (c.get("original") or "").strip()
                     cc = (c.get("corrected") or "").strip()
                     if not o or not cc or o == cc:
                         continue
-                    pat = _re.compile(r"\b" + _re.escape(o) + r"\b")
+                    o_norm = _norm(o)
+                    if not o_norm:
+                        continue
+                    # Build a tolerant pattern: any whitespace run in `original`
+                    # matches any whitespace run in HTML (incl. &nbsp;/NBSP).
+                    # Word boundaries dropped — sentence-level corrections often
+                    # end with punctuation, where \b doesn't fire.
+                    tokens = o_norm.split(" ")
+                    pat = _re.compile(
+                        r"(?:\s|&nbsp;|\u00a0)*".join(_re.escape(t) for t in tokens),
+                        _re.IGNORECASE,
+                    )
                     total = 0
-                    for i in range(0, len(parts), 2):  # text segments only
+                    # Pass 1: replace inside each text segment (fast path — most
+                    # AI-suggested sentences live entirely within one text node).
+                    for i in range(0, len(parts), 2):
                         parts[i], n = pat.subn(cc, parts[i])
                         total += n
+                    # Pass 2 (fallback): if no match in any text segment, the
+                    # sentence may be split across <br>/<p> tags. Try matching
+                    # across the whole zone, allowing tags between tokens.
+                    if total == 0:
+                        cross_pat = _re.compile(
+                            r"(?:\s|&nbsp;|\u00a0|<[^>]+>)*".join(_re.escape(t) for t in tokens),
+                            _re.IGNORECASE,
+                        )
+                        new_zone_full, n2 = cross_pat.subn(cc, "".join(parts))
+                        if n2:
+                            parts = [new_zone_full]  # collapse — we lose tag granularity here, but that's acceptable
+                            total = n2
                     applied_local.append({"original": o, "corrected": cc, "count": total})
                 new_zone = "".join(parts)
                 if not any(a["count"] for a in applied_local):
-                    return None, applied_local, "none of the corrections matched the S text"
+                    # Surface a useful diagnostic so the user can see what actually
+                    # lives in the S zone (first 400 chars of normalized text).
+                    sample = _norm(_re.sub(r"<[^>]+>", " ", zone))[:400]
+                    return None, applied_local, "none of the corrections matched the S text. S zone preview: " + sample
                 patched = raw_html[:zone_start] + new_zone + raw_html[zone_end:]
                 return patched, applied_local, None
 
