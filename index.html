@@ -235,6 +235,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .works-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:12px}
 .works-topbar{display:flex;align-items:center;gap:8px}
 .works-clear-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+.works-search{font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-1,rgba(255,255,255,.04));color:var(--text);outline:none;width:200px;transition:.15s}
+.works-search:focus{border-color:#6c5ce7;background:rgba(108,92,231,.06)}
 /* ── Agents Sidebar (data999 style) ── */
 .agent-list{padding:6px 8px}
 .agent-card{display:flex;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px;transition:.15s;align-items:flex-start}
@@ -511,7 +513,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         </template>
       </div>
       <div class="topbar-hint" v-if="activeCategory==='chat'">Enter 发送 · Shift+Enter 换行</div>
-      <div class="topbar-hint" v-else-if="activeCategory==='works'">
+      <div class="topbar-hint" v-else-if="activeCategory==='works'" style="display:flex;gap:8px;align-items:center">
+        <input class="works-search" v-model="worksSearch" placeholder="🔍 搜索 prompt..." />
         <button class="works-clear-btn" @click="clearWorks">🗑 清空记录</button>
       </div>
       <div class="topbar-hint" v-else-if="activeCategory==='agents'">
@@ -568,7 +571,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
               </div>
             </div>
             <div class="work-card-actions">
-              <button class="btn-sm" @click="window.open(g.results[0],'_blank')">⬇ 下载</button>
+              <button class="btn-sm" @click="downloadResult(g)">⬇ 下载</button>
               <button class="btn-sm" @click="navigator.clipboard.writeText(g.results[0]).then(()=>alert('链接已复制'))">🔗 复制</button>
               <button class="btn-sm" @click="rerun(g)">🔄 重做</button>
               <button class="btn-sm" style="margin-left:auto" @click="removeWork(g.id)">删除</button>
@@ -1592,7 +1595,8 @@ createApp({
       const cat = task.category === 'image' ? 'jpg'
                 : task.category === 'music' ? 'mp3'
                 : 'mp4'
-      const fname = `${(task.label || 'result').replace(/\s+/g,'_').slice(0,40)}.${cat}`
+      const labelSrc = task.label || task.prompt || 'result'
+      const fname = `${labelSrc.replace(/[\s\/\\:*?"<>|]+/g,'_').slice(0,40)}.${cat}`
       const proxied = `/api/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(fname)}`
       // Use a temporary <a download> click to trigger save dialog
       const a = document.createElement('a')
@@ -2154,9 +2158,13 @@ createApp({
       generations.value.filter(g => !g.loading && g.results && g.results.length > 0)
     )
 
+    const worksSearch = ref('')
     const filteredWorks = computed(() => {
-      if (worksFilter.value === 'all') return completedWorks.value
-      return completedWorks.value.filter(g => g.category === worksFilter.value)
+      let list = completedWorks.value
+      if (worksFilter.value !== 'all') list = list.filter(g => g.category === worksFilter.value)
+      const q = worksSearch.value.trim().toLowerCase()
+      if (q) list = list.filter(g => (g.prompt || '').toLowerCase().includes(q))
+      return list
     })
 
     function worksCount(cat) {
@@ -2852,7 +2860,7 @@ createApp({
     return {
       activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
-      completedWorks, filteredWorks, worksFilter, worksFilters, worksCount,
+      completedWorks, filteredWorks, worksFilter, worksFilters, worksCount, worksSearch,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
       selectedRole, rolePopover, rolePopoverPos, rolePopoverStyle, toggleRole, VIDEO_ROLES,
       directorModal, directorRegen, directorUse,
