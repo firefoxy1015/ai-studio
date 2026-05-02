@@ -70,6 +70,11 @@ LINGKEAI_MODEL_IDS = {
     "gpt-5.4-mini": 92,
     "gpt-5.4-nano": 91,
     "gpt-5.4-xhigh": 71,
+    # GPT-5.5 (新增)
+    "gpt-5.5": 99,
+    "gpt-5.5-xhigh": 100,
+    # DeepSeek (新增)
+    "deepseek-v4-pro": 98,
     # Other
     "doubao-seed-2-0-pro-260215": 40,
     "qwen3.6-plus": 85,
@@ -78,7 +83,8 @@ LINGKEAI_MODEL_IDS = {
 
 # Reasoning models need higher max_tokens (thinking chain exhausts budget)
 REASONING_MODELS = {
-    "gpt-5.4-xhigh", "deepseek-r1", "deepseek-r2",
+    "gpt-5.4-xhigh", "gpt-5.5-xhigh",
+    "deepseek-r1", "deepseek-r2", "deepseek-v4-pro",
     "qwq", "qwen3.6-plus", "MiniMax-M2.7",
 }
 

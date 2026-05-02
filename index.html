@@ -1342,12 +1342,15 @@ const { createApp, ref, computed, reactive, nextTick, onMounted, watch, watchEff
 const CHAT_MODELS = [
   { id:'claude-sonnet-4-6',   name:'Sonnet 4.6',        desc:'均衡性能，日常使用首选',              icon:'✦', bg:'linear-gradient(135deg,#b45309,#78350f)' },
   { id:'claude-opus-4-7',     name:'Claude Opus 4.7',    desc:'⚡最强Claude·逆向直连·速度更快',       icon:'◆', bg:'linear-gradient(135deg,#d97706,#92400e)' },
+  { id:'gpt-5.5',             name:'GPT-5.5',            desc:'🆕 新一代旗舰，对话/多模态/代码全面提升', icon:'⬡', bg:'linear-gradient(135deg,#22c55e,#065f46)' },
+  { id:'gpt-5.5-xhigh',       name:'GPT-5.5 深度推理',   desc:'🆕🧠 最高推理强度，深度逻辑分析',       icon:'⬡', bg:'linear-gradient(135deg,#15803d,#022c22)' },
   { id:'gpt-5.4',             name:'GPT-5.4',            desc:'旗舰多模态，工具调用，深度推理',       icon:'⬡', bg:'linear-gradient(135deg,#10b981,#065f46)' },
   { id:'gpt-5.4-mini',        name:'GPT-5.4 Mini',       desc:'快速轻量，性价比高',                  icon:'⬡', bg:'linear-gradient(135deg,#059669,#064e3b)' },
   { id:'gpt-5.4-nano',        name:'GPT-5.4 Nano',       desc:'最轻量，速度最快',                    icon:'⬡', bg:'linear-gradient(135deg,#047857,#064e3b)' },
   { id:'gpt-5.4-xhigh',       name:'GPT-5.4 推理',       desc:'🧠深度推理版，复杂问题首选',           icon:'⬡', bg:'linear-gradient(135deg,#065f46,#022c22)' },
   { id:'gemini-3.1-pro-preview', name:'Gemini 3.1 Pro',  desc:'谷歌旗舰，复杂推理·多模态',           icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)' },
   { id:'grok-4.2',            name:'Grok 4.2',           desc:'万亿参数·16 Agent·实时联网',          icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)' },
+  { id:'deepseek-v4-pro',     name:'DeepSeek V4 Pro',    desc:'🆕 V4旗舰开源·顶尖推理·Agent能力',    icon:'◇', bg:'linear-gradient(135deg,#0ea5e9,#0c4a6e)' },
   { id:'doubao-seed-2-0-pro-260215', name:'豆包 Seed 2.0', desc:'256K上下文，多模态，联网搜索',       icon:'◉', bg:'linear-gradient(135deg,#f59e0b,#78350f)' },
 ]
 
@@ -1357,7 +1360,9 @@ const IMAGE_MODELS = [
   { id:'kling-image-o1',      name:'可灵 Image o1',      desc:'⭐人物一致性最好，像素级改图',          icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)' },
   { id:'kling-v3-omni',       name:'可灵 V3 Omni',       desc:'最多10张参考图融合，4K',              icon:'◈', bg:'linear-gradient(135deg,#0e7490,#164e63)' },
   { id:'doubao-seedream-5-0-260128', name:'即梦 5.0',    desc:'⭐多图融合·联网生图·3K',              icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)' },
+  { id:'doubao-seedream-4-5-251128', name:'即梦 4.5',    desc:'🆕 多图融合·4K·人脸文字优秀',         icon:'✦', bg:'linear-gradient(135deg,#ea580c,#7c2d12)' },
   { id:'gemini-3-pro-image-preview', name:'Nano Banana Pro', desc:'文字渲染最强，8K分辨率',         icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)' },
+  { id:'gemini-3.1-flash-image-preview', name:'Nano Banana 2', desc:'🆕 速度版·1:4/4:1超宽比·联网生图', icon:'✿', bg:'linear-gradient(135deg,#60a5fa,#1e40af)' },
   { id:'gpt-image-1.5-all',   name:'GPT Image 1.5',      desc:'语义理解最强，大白话生图',             icon:'⬡', bg:'linear-gradient(135deg,#10b981,#065f46)' },
   { id:'mj_imagine',          name:'Midjourney',          desc:'艺术感最强，支持普通/动漫风格',         icon:'🎨', bg:'linear-gradient(135deg,#ec4899,#831843)' },
   { id:'wan2.7-image',        name:'万相 2.7',           desc:'最新版4K，中文语义理解强',             icon:'◉', bg:'linear-gradient(135deg,#ef4444,#7f1d1d)' },
@@ -1459,6 +1464,12 @@ const VIDEO_MODELS = [
     refMode:'single', hasDuration:true, hasMode:false, hasRatio:true },
   { id:'viduq3',                    name:'Vidu Q3',            desc:'最长16秒，高质量', icon:'◉', bg:'linear-gradient(135deg,#ec4899,#831843)', source:'data999',
     refMode:'optional', hasDuration:true, hasMode:true, hasRatio:true },
+  { id:'viduq3-cankaosheng',        name:'Vidu Q3 参考生',     desc:'🆕 1-7张参考图，主体一致性，最长16秒', icon:'◉', bg:'linear-gradient(135deg,#db2777,#831843)', source:'data999',
+    refMode:'multi', hasDuration:true, hasMode:true, hasRatio:true },
+  { id:'kwvideo-v2-ref',            name:'Seedance 2.0 参考生', desc:'🆕 1-9张参考图，风格/元素融合', icon:'✦', bg:'linear-gradient(135deg,#fb923c,#7c2d12)', source:'data999',
+    refMode:'multi', hasDuration:true, hasMode:false, hasRatio:true },
+  { id:'kling-v3-omni-cankao',      name:'可灵 V3 Omni 参考生',desc:'🆕 1-7张参考图，AI智能分镜，有声', icon:'◈', bg:'linear-gradient(135deg,#06b6d4,#155e75)', source:'data999',
+    refMode:'multi', hasDuration:true, hasMode:true, hasRatio:true },
   // Bytefor
   { id:'Seedance 2.0 Fast',         name:'Seedance 2.0 Fast',  desc:'快速版，支持人脸素材', icon:'★', bg:'linear-gradient(135deg,#0891b2,#164e63)', source:'bytefor',
     refMode:'optional', hasDuration:true, hasMode:false, hasRatio:true },
