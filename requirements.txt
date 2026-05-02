@@ -6,3 +6,4 @@ imageio-ffmpeg==0.5.1
 apscheduler==3.10.4
 beautifulsoup4==4.12.3
 lxml==5.2.2
+pypdf==5.1.0

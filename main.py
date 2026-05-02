@@ -1512,6 +1512,205 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
         raise HTTPException(500, f"history fetch failed: {e}")
 
 
+# ─────────────────────────────────────────────────────────────────────────
+#  Patient files (Documents tab) — list + AI summary of attached files
+# ─────────────────────────────────────────────────────────────────────────
+_neo_file_summary_cache: dict = {}  # { file_id: {"at": ts, "summary": str} }
+
+@app.get("/api/neo-patient-files")
+async def neo_patient_files(pid: str):
+    """List patient's attached files (Documents tab in Neo).
+    Returns lightweight metadata only — actual download happens server-side
+    in /api/neo-file-summary so we don't expose CDN-signed URLs to the browser.
+    """
+    try:
+        client = await _get_neo_session()
+        url = f"{NEO_BASE}/files/patient/{pid}"
+        r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+        if r.status_code != 200 or _looks_like_login_page(r.text, str(r.url)):
+            # Try once more after re-login
+            if await _neo_login(client):
+                r = await client.get(url, headers={"X-Requested-With": "XMLHttpRequest"})
+            if r.status_code != 200:
+                raise HTTPException(502, f"neo files {r.status_code}")
+        try:
+            data = r.json()
+        except Exception:
+            raise HTTPException(502, "neo files: non-JSON response")
+        files = data.get("files", []) or []
+        out = []
+        for f in files:
+            created = ((f.get("createdAtLocalBranchTime") or {}).get("date") or "")[:10]
+            out.append({
+                "id":         f.get("id"),
+                "filename":   f.get("filename") or "",
+                "title":      f.get("title") or "",
+                "category":   f.get("category") or "",
+                "mime":       f.get("mimeType") or "",
+                "size":       f.get("fileSize") or 0,
+                "created":    created,
+                "type":       f.get("type") or "",
+            })
+        # Newest first
+        out.sort(key=lambda x: x.get("created", ""), reverse=True)
+        return {"pid": pid, "files": out}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"file list failed: {e}")
+
+
+async def _fetch_file_bytes(client: httpx.AsyncClient, pid: str, file_id: int) -> tuple[bytes, str, str]:
+    """Look up the cdnLink for one file_id and download the bytes.
+    Returns (bytes, filename, mime). Re-logs in once if needed."""
+    list_url = f"{NEO_BASE}/files/patient/{pid}"
+    r = await client.get(list_url, headers={"X-Requested-With": "XMLHttpRequest"})
+    if r.status_code != 200 or _looks_like_login_page(r.text, str(r.url)):
+        if await _neo_login(client):
+            r = await client.get(list_url, headers={"X-Requested-With": "XMLHttpRequest"})
+    data = r.json()
+    target = next((f for f in (data.get("files") or []) if int(f.get("id") or 0) == int(file_id)), None)
+    if not target:
+        raise HTTPException(404, f"file {file_id} not found on patient {pid}")
+    cdn = target.get("cdnLink") or ""
+    if not cdn:
+        raise HTTPException(502, "neo file has no cdnLink")
+    # Download — same authed httpx client (Neo CDN paths require the session cookie)
+    dl = await client.get(cdn, follow_redirects=True, timeout=60)
+    if dl.status_code != 200:
+        raise HTTPException(502, f"file download {dl.status_code}")
+    return dl.content, (target.get("filename") or "file.bin"), (target.get("mimeType") or "application/octet-stream")
+
+
+def _extract_text_from_pdf(data: bytes) -> str:
+    """Best-effort PDF text extraction. Tries pypdf, falls back to a no-op."""
+    try:
+        from pypdf import PdfReader  # type: ignore
+        import io as _io
+        rd = PdfReader(_io.BytesIO(data))
+        chunks = []
+        for p in rd.pages[:60]:  # cap pages so a 200-page record doesn't blow up
+            try:
+                chunks.append(p.extract_text() or "")
+            except Exception:
+                continue
+        return "\n".join(chunks).strip()
+    except Exception:
+        return ""
+
+
+def _extract_text_from_image(data: bytes, mime: str) -> str:
+    """OCR an image attachment. Returns "" if Tesseract isn't available."""
+    try:
+        import pytesseract  # type: ignore
+        from PIL import Image  # type: ignore
+        import io as _io
+        img = Image.open(_io.BytesIO(data))
+        return (pytesseract.image_to_string(img) or "").strip()
+    except Exception:
+        return ""
+
+
+@app.get("/api/neo-file-summary")
+async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
+    """Download one of a patient's attached files server-side, extract text,
+    and have GPT summarize history / meds / vaccines.
+    Cached 24h per file_id (refresh=true bypasses cache)."""
+    import time as _time, json as _json
+    cache_key = str(file_id)
+    cached = _neo_file_summary_cache.get(cache_key)
+    if cached and not refresh and (_time.time() - cached["at"]) < 86400:
+        return {"file_id": file_id, "cached": True, **cached["payload"]}
+
+    try:
+        client = await _get_neo_session()
+        try:
+            data, filename, mime = await _fetch_file_bytes(client, pid, file_id)
+        except HTTPException:
+            raise
+        except Exception:
+            # Try one more time after re-login
+            if await _neo_login(client):
+                data, filename, mime = await _fetch_file_bytes(client, pid, file_id)
+            else:
+                _neo_session["client"] = None
+                raise
+
+        # Extract text by mime type
+        text = ""
+        kind = "unknown"
+        m = (mime or "").lower()
+        if "pdf" in m:
+            kind = "pdf"
+            text = _extract_text_from_pdf(data)
+        elif m.startswith("image/"):
+            kind = "image"
+            text = _extract_text_from_image(data, mime)
+        elif "text" in m:
+            kind = "text"
+            try:
+                text = data.decode("utf-8", errors="ignore")
+            except Exception:
+                text = ""
+
+        text = (text or "").strip()
+        if not text:
+            payload = {
+                "filename": filename, "mime": mime, "kind": kind,
+                "size": len(data),
+                "summary": "（无法从此文件中提取文字。可能是扫描件未做 OCR / 图片质量太低 / 加密 PDF。）",
+                "raw_chars": 0,
+            }
+            _neo_file_summary_cache[cache_key] = {"at": _time.time(), "payload": payload}
+            return {"file_id": file_id, "cached": False, **payload}
+
+        # Trim to a sane size for the LLM
+        snippet = text if len(text) <= 18000 else text[:18000] + "\n...(truncated)"
+
+        sys_prompt = (
+            "你是兽医技师助手。下面是一份从外院调来的病历文件原文（可能是 PDF/图片 OCR 出来的纯文本，"
+            "格式可能比较乱）。请结构化总结，让接诊技师 30 秒内能掌握重点。\n\n"
+            "输出固定 4 个栏目（即使该栏没有内容也要保留并写「无」）：\n"
+            "【📋 概况】1–2 句话：动物名/品种/性别/年龄；这份文件大致是什么（例如：猫白血病检查报告 / 转诊信 / 既往就诊摘要）。\n"
+            "【🩺 重要病史 (HISTORY)】列出最相关的诊断、慢性病、手术、住院记录。日期都保留。\n"
+            "【💊 用药 (MEDS)】列所有提到的药名 + 剂量 + 频率 + 起止日期（拿不到日期就写「日期未提」）。\n"
+            "【💉 疫苗 (VACCINES)】列疫苗名、日期、下次到期。\n\n"
+            "规则：\n"
+            "- 全部用中文输出，专有词（药名/疫苗品牌/检查项目）保留英文原文。\n"
+            "- 不要瞎编。原文没写的就写「无」或「未提」。\n"
+            "- 列表用 `- ` 开头，简洁。"
+        )
+
+        async with httpx.AsyncClient(timeout=90) as ai:
+            ar = await ai.post(
+                "https://api.ai6700.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DATA999_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "gpt-5.4-mini",
+                    "messages": [
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user",   "content": f"文件名：{filename}\n类型：{kind}\n\n--- 原文 ---\n{snippet}"},
+                    ],
+                },
+            )
+            if ar.status_code != 200:
+                raise HTTPException(502, f"AI {ar.status_code}: {ar.text[:200]}")
+            jd = ar.json()
+            summary = (((jd.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+
+        payload = {
+            "filename": filename, "mime": mime, "kind": kind,
+            "size": len(data), "raw_chars": len(text),
+            "summary": summary or "（AI 未返回内容）",
+        }
+        _neo_file_summary_cache[cache_key] = {"at": _time.time(), "payload": payload}
+        return {"file_id": file_id, "cached": False, **payload}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"file summary failed: {e}")
+
+
 @app.get("/api/neo-files-probe")
 async def neo_files_probe(pid: str):
     """Probe several likely Neo paths to find where patient attachments live."""
