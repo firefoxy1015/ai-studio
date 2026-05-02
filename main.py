@@ -1516,18 +1516,26 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
 async def neo_files_probe(pid: str):
     """Probe several likely Neo paths to find where patient attachments live."""
     candidates = [
+        # ajax/output style
         f"{NEO_BASE}/ajax/output/?page=modals/patient_files&patient_id={pid}",
         f"{NEO_BASE}/ajax/output/?page=modals/patient_documents&patient_id={pid}",
         f"{NEO_BASE}/ajax/output/?page=modals/patient_attachments&patient_id={pid}",
-        f"{NEO_BASE}/patients/{pid}/files",
-        f"{NEO_BASE}/patients/{pid}/files/list",
-        f"{NEO_BASE}/patients/{pid}/attachments",
-        f"{NEO_BASE}/patients/{pid}/documents",
-        f"{NEO_BASE}/patients/{pid}/documents/list",
-        f"{NEO_BASE}/shared/files/list?patient_id={pid}",
-        f"{NEO_BASE}/shared/documents/list?patient_id={pid}",
-        f"{NEO_BASE}/shared/attachments/list?patient_id={pid}",
+        f"{NEO_BASE}/ajax/output/?page=modals/files&patient_id={pid}",
+        f"{NEO_BASE}/ajax/output/?page=modals/documents&patient_id={pid}",
+        f"{NEO_BASE}/ajax/output/?page=patients/files&patient_id={pid}",
+        f"{NEO_BASE}/ajax/output/?page=patients/files_list&patient_id={pid}",
+        # tab style
+        f"{NEO_BASE}/patients/{pid}/files-tab",
+        f"{NEO_BASE}/patients/{pid}/tabs/files",
+        # shared list style (matches /shared/prescriptions/list pattern)
+        f"{NEO_BASE}/shared/files/list?patient_id={pid}&draw=1&start=0&length=50",
+        f"{NEO_BASE}/shared/patient_files/list?patient_id={pid}&draw=1&start=0&length=50",
+        f"{NEO_BASE}/shared/documents/list?patient_id={pid}&draw=1&start=0&length=50",
+        f"{NEO_BASE}/shared/attachments/list?patient_id={pid}&draw=1&start=0&length=50",
+        # page-data style
         f"{NEO_BASE}/patients/{pid}/page-data",
+        # patient main page (HTML — search for file/document references)
+        f"{NEO_BASE}/patients/{pid}",
     ]
     out = []
     try:
@@ -1535,15 +1543,29 @@ async def neo_files_probe(pid: str):
         for u in candidates:
             try:
                 r = await client.get(u, headers={"X-Requested-With": "XMLHttpRequest"}, timeout=15)
-                snip = (r.text or "")[:400]
+                body = r.text or ""
+                snip = body[:400]
                 ct = r.headers.get("content-type", "")
+                # If body is HTML (large), also extract any href/src that mentions
+                # files/documents/attachments/upload/download — these are signals
+                # of where the file UI lives.
+                hints = []
+                if "html" in ct.lower() and len(body) > 1000:
+                    import re as _re
+                    for m in _re.finditer(r'(?:href|src|data-url|data-href|action)="([^"]{6,200})"', body):
+                        v = m.group(1).lower()
+                        if any(k in v for k in ("file","document","attach","upload","download")):
+                            if v not in hints:
+                                hints.append(m.group(1))
+                                if len(hints) >= 30: break
                 out.append({
                     "url": u,
                     "status": r.status_code,
                     "ct": ct,
-                    "len": len(r.text or ""),
-                    "login": _looks_like_login_page(r.text, str(r.url)),
+                    "len": len(body),
+                    "login": _looks_like_login_page(body, str(r.url)),
                     "snip": snip,
+                    "hints": hints,
                 })
             except Exception as e:
                 out.append({"url": u, "error": str(e)})
