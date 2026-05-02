@@ -1778,6 +1778,88 @@ async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
         raise HTTPException(500, f"file summary failed: {e}")
 
 
+class VisionSummaryReq(BaseModel):
+    images_b64: list[str]      # JPEG/PNG base64 strings (no data: prefix)
+    filename: str = ""
+    mime_hint: str = "image/jpeg"
+
+@app.post("/api/neo-vision-summary")
+async def neo_vision_summary(req: VisionSummaryReq):
+    """Browser sends PDF pages already rasterized to base64 images.
+    We OCR each page via vision API and feed the joined text into the same
+    summarizer used by /api/neo-file-summary."""
+    if not req.images_b64:
+        raise HTTPException(400, "no images")
+    if len(req.images_b64) > 12:
+        raise HTTPException(400, "too many pages (max 12)")
+
+    chunks = []
+    for i, b64 in enumerate(req.images_b64):
+        try:
+            import base64 as _b64
+            raw = _b64.b64decode(b64)
+        except Exception:
+            continue
+        ocr = await _vision_ocr_image(raw, req.mime_hint or "image/jpeg")
+        if ocr.strip():
+            chunks.append(f"--- page {i+1} ---\n{ocr}")
+    text = "\n\n".join(chunks).strip()
+    if not text:
+        return {"filename": req.filename, "summary": "（页面 OCR 没识别出任何文字。）", "raw_chars": 0, "pages": len(req.images_b64)}
+
+    snippet = text if len(text) <= 18000 else text[:18000] + "\n...(truncated)"
+    sys_prompt = (
+        "你是兽医技师助手。下面是一份从外院调来的病历文件原文（PDF 经 OCR 转出的纯文本，"
+        "格式可能比较乱）。请结构化总结，让接诊技师 30 秒内能掌握重点。\n\n"
+        "输出固定 4 个栏目（即使该栏没有内容也要保留并写「无」）：\n"
+        "【📋 概况】1–2 句话：动物名/品种/性别/年龄；这份文件大致是什么。\n"
+        "【🩺 重要病史 (HISTORY)】列出最相关的诊断、慢性病、手术、住院记录。日期都保留。\n"
+        "【💊 用药 (MEDS)】列所有提到的药名 + 剂量 + 频率 + 起止日期（拿不到日期就写「日期未提」）。\n"
+        "【💉 疫苗 (VACCINES)】列疫苗名、日期、下次到期。\n\n"
+        "规则：全部用中文输出，专有词保留英文原文。原文没写的就写「无」或「未提」。列表用 `- ` 开头。"
+    )
+    async with httpx.AsyncClient(timeout=90) as ai:
+        ar = await ai.post(
+            "https://api.ai6700.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {DATA999_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-5.4-mini",
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user",   "content": f"文件名：{req.filename}\n页数：{len(req.images_b64)}\n\n--- OCR 原文 ---\n{snippet}"},
+                ],
+            },
+        )
+        if ar.status_code != 200:
+            raise HTTPException(502, f"AI {ar.status_code}: {ar.text[:200]}")
+        jd = ar.json()
+        summary = (((jd.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    return {"filename": req.filename, "summary": summary or "（AI 未返回内容）", "raw_chars": len(text), "pages": len(req.images_b64)}
+
+
+@app.get("/api/neo-file-bytes")
+async def neo_file_bytes(pid: str, file_id: int):
+    """Stream file bytes (e.g. PDF) back to the browser so it can render pages with PDF.js."""
+    try:
+        client = await _get_neo_session()
+        try:
+            data, filename, mime = await _fetch_file_bytes(client, pid, file_id)
+        except Exception:
+            if await _neo_login(client):
+                data, filename, mime = await _fetch_file_bytes(client, pid, file_id)
+            else:
+                _neo_session["client"] = None
+                raise
+        from fastapi.responses import Response
+        return Response(content=data, media_type=mime or "application/octet-stream",
+                        headers={"Content-Disposition": f'inline; filename="{filename}"',
+                                 "Access-Control-Allow-Origin": "*"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"file bytes failed: {e}")
+
+
 @app.get("/api/neo-files-probe")
 async def neo_files_probe(pid: str):
     """Probe several likely Neo paths to find where patient attachments live."""
