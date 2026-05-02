@@ -202,6 +202,28 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .system-wrap{padding:0 8px 8px}
 .system-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;resize:none;outline:none;height:70px;font-family:inherit}
 .system-input:focus{border-color:var(--accent)}
+.multi-mode-box{margin-top:10px;padding:8px;background:rgba(108,92,231,.06);border:1px solid rgba(108,92,231,.2);border-radius:8px}
+.multi-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text);font-weight:500}
+.multi-toggle input{cursor:pointer;accent-color:#6c5ce7}
+.multi-hint{font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4}
+.multi-pick-list{display:flex;flex-direction:column;gap:3px;max-height:200px;overflow-y:auto;padding-right:2px}
+.multi-pick{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--text);transition:.12s;border:1px solid transparent}
+.multi-pick:hover:not(.disabled){background:rgba(255,255,255,.04)}
+.multi-pick.active{background:rgba(108,92,231,.15);border-color:rgba(108,92,231,.4)}
+.multi-pick.disabled{opacity:.4;cursor:not-allowed}
+.multi-pick input{cursor:pointer;accent-color:#6c5ce7;flex-shrink:0}
+.multi-pick-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;color:#fff;font-size:10px;flex-shrink:0}
+.multi-pick-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.multi-summarizer{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;outline:none}
+.multi-summarizer:focus{border-color:#6c5ce7}
+.multi-result{max-width:100% !important}
+.multi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:12px}
+.multi-card{background:var(--bg-1,rgba(255,255,255,.03));border:1px solid var(--border);border-radius:10px;padding:10px 12px;overflow:hidden}
+.multi-card-head{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.multi-card-body{font-size:13px;line-height:1.55;max-height:300px;overflow-y:auto}
+.multi-summary{background:linear-gradient(135deg,rgba(108,92,231,.1),rgba(116,185,255,.06));border:1px solid rgba(108,92,231,.3);border-radius:10px;padding:12px 14px}
+.multi-summary-head{font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:8px}
+.multi-summary-body{font-size:14px;line-height:1.6}
 .section-label{font-size:11px;color:var(--muted);padding:8px 8px 4px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
 
 /* ── Works Tab ───────────────────────────────────────── */
@@ -434,6 +456,29 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div v-if="activeCategory==='chat'" class="system-wrap">
       <div class="section-label">系统提示词</div>
       <textarea class="system-input" v-model="chatSystem" placeholder="可选：设置AI角色..."></textarea>
+      <div class="multi-mode-box">
+        <label class="multi-toggle">
+          <input type="checkbox" v-model="multiMode" />
+          <span>🤝 多模型协作</span>
+        </label>
+        <div class="multi-hint" v-if="!multiMode">N 个模型并行回答 → AI 综合最佳答案</div>
+        <template v-if="multiMode">
+          <div class="section-label" style="padding:8px 0 4px;font-size:11px">参与模型 (2-4)</div>
+          <div class="multi-pick-list">
+            <label v-for="m in CHAT_MODELS" :key="m.id" class="multi-pick"
+                   :class="{active: multiModels.includes(m.id), disabled: !multiModels.includes(m.id) && multiModels.length>=4}">
+              <input type="checkbox" :value="m.id" v-model="multiModels"
+                     :disabled="!multiModels.includes(m.id) && multiModels.length>=4" />
+              <span class="multi-pick-icon" :style="{background:m.bg}">{{m.icon}}</span>
+              <span class="multi-pick-name">{{m.name}}</span>
+            </label>
+          </div>
+          <div class="section-label" style="padding:8px 0 4px;font-size:11px">总结模型</div>
+          <select class="multi-summarizer" v-model="multiSummarizer">
+            <option v-for="m in CHAT_MODELS" :key="m.id" :value="m.id">{{m.name}}</option>
+          </select>
+        </template>
+      </div>
     </div>
 
     <!-- Agents sidebar (data999 style) -->
@@ -532,11 +577,25 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
           <div class="empty-text">选择左侧模型，开始对话</div>
         </div>
         <div class="chat-messages">
-          <div v-for="(msg,i) in chatMessages" :key="i" :class="['msg', msg.role]">
-            <div class="msg-bubble" v-html="renderMd(msg.content)"></div>
-          </div>
-          <div v-if="loadingModels[selectedModelId] || chatStreaming" class="msg assistant">
-            <div class="msg-bubble" v-html="(chatStreaming ? renderMd(chatStreaming) : '<span class=\'thinking-dots\'><span>.</span><span>.</span><span>.</span></span>')+'<span class=\'cursor-blink\'></span>'"></div>
+          <template v-for="(msg,i) in chatMessages" :key="i">
+            <div v-if="!msg.multi" :class="['msg', msg.role]">
+              <div class="msg-bubble" v-html="renderMd(msg.content)"></div>
+            </div>
+            <div v-else class="msg assistant multi-result">
+              <div class="multi-grid">
+                <div v-for="(text, modelKey) in msg.responses" :key="modelKey" class="multi-card">
+                  <div class="multi-card-head">{{ modelById(modelKey)?.name || modelKey }}</div>
+                  <div class="multi-card-body" v-html="renderMd(text)"></div>
+                </div>
+              </div>
+              <div class="multi-summary">
+                <div class="multi-summary-head">🧠 综合答案 · by {{ modelById(msg.summarizer)?.name || msg.summarizer }}</div>
+                <div class="multi-summary-body" v-html="renderMd(msg.summary)"></div>
+              </div>
+            </div>
+          </template>
+          <div v-if="loadingModels[selectedModelId] || chatStreaming || multiLoading" class="msg assistant">
+            <div class="msg-bubble" v-html="(multiLoading ? '🤝 '+multiLoadingText+'<span class=\'cursor-blink\'></span>' : chatStreaming ? renderMd(chatStreaming)+'<span class=\'cursor-blink\'></span>' : '<span class=\'thinking-dots\'><span>.</span><span>.</span><span>.</span></span><span class=\'cursor-blink\'></span>')"></div>
           </div>
         </div>
       </template>
@@ -1462,6 +1521,12 @@ createApp({
     const chatStreaming = ref('')
     const chatSystem = ref('')
     const chatHistories = reactive({}) // per-model: { modelId: {messages:[], system:''} }
+    // ── 多模型协作 state ──
+    const multiMode       = ref(false)
+    const multiModels     = ref(['claude-opus-4-7', 'gpt-5.4'])
+    const multiSummarizer = ref('claude-opus-4-7')
+    const multiLoading    = ref(false)
+    const multiLoadingText = ref('')
     const loadingModels = reactive({})
     const isLoading = computed(() => !!loadingModels[selectedModelId.value])
     const generations = ref([])
@@ -2220,9 +2285,62 @@ createApp({
       if (!selectedModelId.value) { alert('请先选择模型'); return }
 
       if (activeCategory.value === 'chat') {
-        await sendChat()
+        if (multiMode.value) await sendChatMulti()
+        else await sendChat()
       } else {
         await generate()
+      }
+    }
+
+    async function sendChatMulti() {
+      if (multiModels.value.length < 2) { alert('请至少选 2 个模型'); return }
+      const text = promptText.value.trim()
+      if (!text) return
+      // Push user message
+      chatMessages.value.push({ role:'user', content: text })
+      promptText.value = ''
+      multiLoading.value = true
+      multiLoadingText.value = `${multiModels.value.length} 个模型并行生成中...`
+      await nextTick(); scrollBottom()
+      try {
+        // Build history (exclude the just-pushed user message)
+        const history = chatMessages.value
+          .slice(0, -1)
+          .filter(m => !m.multi && (m.role === 'user' || m.role === 'assistant'))
+          .map(m => ({ role: m.role, content: m.content }))
+        const r = await fetch('/api/chat/multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: text,
+            models: [...multiModels.value],
+            summarizer: multiSummarizer.value,
+            system: chatSystem.value || null,
+            history,
+          }),
+        })
+        if (!r.ok) {
+          let detail = '请求失败 ' + r.status
+          try { const e = await r.json(); detail = e.detail || detail } catch {}
+          throw new Error(detail)
+        }
+        multiLoadingText.value = '🧠 综合分析中...'
+        const data = await r.json()
+        chatMessages.value.push({
+          role: 'assistant', multi: true,
+          responses: data.responses || {},
+          summary: data.summary || '(无综合)',
+          summarizer: data.summarizer,
+          // Plain content used as fallback if multi rendering breaks; also makes saveChat easier
+          content: data.summary || '',
+        })
+      } catch (e) {
+        chatMessages.value.push({ role: 'assistant', content: '❌ 多模型请求失败：' + e.message })
+      } finally {
+        multiLoading.value = false
+        multiLoadingText.value = ''
+        scrollBottom()
+        saveChat()
       }
     }
 
@@ -2860,6 +2978,7 @@ createApp({
     return {
       activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
+      CHAT_MODELS, multiMode, multiModels, multiSummarizer, multiLoading, multiLoadingText,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount, worksSearch,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
       selectedRole, rolePopover, rolePopoverPos, rolePopoverStyle, toggleRole, VIDEO_ROLES,

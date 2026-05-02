@@ -307,6 +307,81 @@ async def chat_sync(req: ChatRequest):
     return {"text": full}
 
 
+# ── Multi-model collaboration (data999 大模型 旗舰功能) ──
+class MultiChatRequest(BaseModel):
+    question: str
+    models: List[str]                    # 2-4 model IDs to fan out to
+    summarizer: str = "claude-opus-4-7"  # judge model
+    system: Optional[str] = None
+    history: List[Message] = []          # prior turns (optional)
+
+
+async def _one_shot_lingkeai(model_key: str, messages: List[Message], system: Optional[str]) -> tuple[str, str]:
+    """Single-call helper for parallel fan-out. Returns (model_key, text or error)."""
+    try:
+        model_id = LINGKEAI_MODEL_IDS.get(model_key)
+        if not model_id:
+            return model_key, f"[模型 {model_key} 不支持]"
+        req = ChatRequest(model=model_key, messages=messages, system=system,
+                          web_search=False, enable_thinking=False)
+        full = ""
+        async for chunk in _stream_lingkeai(req):
+            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                try:
+                    full += json.loads(chunk[6:].strip()).get("text", "")
+                except Exception:
+                    pass
+        return model_key, full or "[空响应]"
+    except Exception as e:
+        return model_key, f"[错误: {str(e)[:200]}]"
+
+
+@app.post("/api/chat/multi")
+async def chat_multi(req: MultiChatRequest):
+    """多模型协作：N 个模型并行回答 → 第 N+1 个模型综合总结。"""
+    import asyncio as _asyncio
+    if len(req.models) < 2:
+        raise HTTPException(400, detail="多模型协作至少需要 2 个模型")
+    if len(req.models) > 4:
+        raise HTTPException(400, detail="最多 4 个模型并行")
+    # Build conversation messages (history + current question)
+    msgs = list(req.history) + [Message(role="user", content=req.question)]
+    # Fan out in parallel
+    results = await _asyncio.gather(
+        *[_one_shot_lingkeai(m, msgs, req.system) for m in req.models],
+        return_exceptions=False,
+    )
+    responses = {k: v for (k, v) in results}
+    # Build summarizer prompt
+    parts = [f"用户问题：{req.question}\n\n以下是 {len(req.models)} 个不同模型对该问题的回答："]
+    for i, (k, v) in enumerate(results, 1):
+        parts.append(f"\n──── 模型 {i} ({k}) 的回答 ────\n{v}")
+    parts.append(
+        "\n\n请你作为综合分析专家，评估这些回答的优缺点，"
+        "提取每个模型的独到见解，去除错误或矛盾之处，"
+        "最终给出一个最全面、最准确、最实用的综合答案。"
+        "用清晰的结构化 Markdown 输出。"
+    )
+    summarizer_prompt = "".join(parts)
+    summarizer_req = ChatRequest(
+        model=req.summarizer,
+        messages=[Message(role="user", content=summarizer_prompt)],
+        system="你是综合分析专家，擅长从多个 AI 模型的回答中提炼最佳答案。",
+        web_search=False, enable_thinking=False,
+    )
+    summary = ""
+    try:
+        async for chunk in _stream_lingkeai(summarizer_req):
+            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                try:
+                    summary += json.loads(chunk[6:].strip()).get("text", "")
+                except Exception:
+                    pass
+    except Exception as e:
+        summary = f"[总结失败: {str(e)[:200]}]"
+    return {"responses": responses, "summary": summary or "[空响应]", "summarizer": req.summarizer}
+
+
 _DIRECTOR_SHOTS = [
     "极端特写", "低角度仰拍", "鸟瞰俯拍", "荷兰角倾斜构图", "跟拍运动镜头",
     "隐藏摄影机偷拍感", "长镜头一镜到底", "分裂画面", "主观第一人称视角", "旋转360度环绕",
