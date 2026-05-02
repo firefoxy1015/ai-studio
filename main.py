@@ -1512,6 +1512,46 @@ async def get_neo_history(pid: str, days: int = 365, refresh: bool = False):
         raise HTTPException(500, f"history fetch failed: {e}")
 
 
+@app.get("/api/neo-files-probe")
+async def neo_files_probe(pid: str):
+    """Probe several likely Neo paths to find where patient attachments live."""
+    candidates = [
+        f"{NEO_BASE}/ajax/output/?page=modals/patient_files&patient_id={pid}",
+        f"{NEO_BASE}/ajax/output/?page=modals/patient_documents&patient_id={pid}",
+        f"{NEO_BASE}/ajax/output/?page=modals/patient_attachments&patient_id={pid}",
+        f"{NEO_BASE}/patients/{pid}/files",
+        f"{NEO_BASE}/patients/{pid}/files/list",
+        f"{NEO_BASE}/patients/{pid}/attachments",
+        f"{NEO_BASE}/patients/{pid}/documents",
+        f"{NEO_BASE}/patients/{pid}/documents/list",
+        f"{NEO_BASE}/shared/files/list?patient_id={pid}",
+        f"{NEO_BASE}/shared/documents/list?patient_id={pid}",
+        f"{NEO_BASE}/shared/attachments/list?patient_id={pid}",
+        f"{NEO_BASE}/patients/{pid}/page-data",
+    ]
+    out = []
+    try:
+        client = await _get_neo_session()
+        for u in candidates:
+            try:
+                r = await client.get(u, headers={"X-Requested-With": "XMLHttpRequest"}, timeout=15)
+                snip = (r.text or "")[:400]
+                ct = r.headers.get("content-type", "")
+                out.append({
+                    "url": u,
+                    "status": r.status_code,
+                    "ct": ct,
+                    "len": len(r.text or ""),
+                    "login": _looks_like_login_page(r.text, str(r.url)),
+                    "snip": snip,
+                })
+            except Exception as e:
+                out.append({"url": u, "error": str(e)})
+        return {"pid": pid, "results": out}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/neo-history-debug")
 async def neo_history_debug(pid: str, days: int = 365):
     """Diagnostic: dumps raw URL, status, redirect target, HTML head, and selector counts."""
