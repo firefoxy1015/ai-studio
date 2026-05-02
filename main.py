@@ -1664,7 +1664,7 @@ async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
     import time as _time, json as _json
     cache_key = str(file_id)
     cached = _neo_file_summary_cache.get(cache_key)
-    if cached and not refresh and (_time.time() - cached["at"]) < 86400:
+    if cached and not refresh and (_time.time() - cached["at"]) < 604800:  # 7 days
         return {"file_id": file_id, "cached": True, **cached["payload"]}
 
     try:
@@ -1782,6 +1782,7 @@ class VisionSummaryReq(BaseModel):
     images_b64: list[str]      # JPEG/PNG base64 strings (no data: prefix)
     filename: str = ""
     mime_hint: str = "image/jpeg"
+    file_id: int = 0           # optional — if set, result is cached under this id
 
 @app.post("/api/neo-vision-summary")
 async def neo_vision_summary(req: VisionSummaryReq):
@@ -1792,6 +1793,19 @@ async def neo_vision_summary(req: VisionSummaryReq):
         raise HTTPException(400, "no images")
     if len(req.images_b64) > 12:
         raise HTTPException(400, "too many pages (max 12)")
+
+    # If we already cached this file_id, return the cached payload immediately
+    import time as _time
+    if req.file_id:
+        ck = str(req.file_id)
+        cached = _neo_file_summary_cache.get(ck)
+        if cached and (_time.time() - cached["at"]) < 604800:
+            p = cached["payload"]
+            return {"filename": p.get("filename", req.filename),
+                    "summary": p.get("summary", ""),
+                    "raw_chars": p.get("raw_chars", 0),
+                    "pages": len(req.images_b64),
+                    "cached": True}
 
     chunks = []
     for i, b64 in enumerate(req.images_b64):
@@ -1834,7 +1848,19 @@ async def neo_vision_summary(req: VisionSummaryReq):
             raise HTTPException(502, f"AI {ar.status_code}: {ar.text[:200]}")
         jd = ar.json()
         summary = (((jd.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
-    return {"filename": req.filename, "summary": summary or "（AI 未返回内容）", "raw_chars": len(text), "pages": len(req.images_b64)}
+    payload = {
+        "filename": req.filename,
+        "summary": summary or "（AI 未返回内容）",
+        "raw_chars": len(text),
+        "pages": len(req.images_b64),
+        "kind": "pdf-ocr-browser",
+        "size": 0,
+        "mime": "application/pdf",
+    }
+    # Persist so the next click within 7 days returns instantly via /api/neo-file-summary
+    if req.file_id:
+        _neo_file_summary_cache[str(req.file_id)] = {"at": _time.time(), "payload": payload}
+    return payload
 
 
 @app.get("/api/neo-file-bytes")
