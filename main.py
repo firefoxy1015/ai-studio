@@ -1611,6 +1611,8 @@ def _extract_text_from_image(data: bytes, mime: str) -> str:
         return ""
 
 
+_pdf_render_diag = {"err": None}
+
 def _pdf_to_images(data: bytes, max_pages: int = 8) -> list[bytes]:
     """Render PDF pages to JPEG bytes (for vision OCR). Uses PyMuPDF (fitz)."""
     try:
@@ -1623,9 +1625,27 @@ def _pdf_to_images(data: bytes, max_pages: int = 8) -> list[bytes]:
             pm = page.get_pixmap(dpi=150)
             out.append(pm.tobytes("jpeg"))
         doc.close()
+        _pdf_render_diag["err"] = None
         return out
-    except Exception:
+    except Exception as e:
+        _pdf_render_diag["err"] = f"{type(e).__name__}: {e}"
         return []
+
+
+@app.get("/api/neo-pdf-diag")
+async def neo_pdf_diag():
+    info = {"render_err": _pdf_render_diag.get("err")}
+    try:
+        import fitz  # type: ignore
+        info["fitz_version"] = getattr(fitz, "__version__", "unknown")
+    except Exception as e:
+        info["fitz_import_err"] = f"{type(e).__name__}: {e}"
+    try:
+        import pypdf  # type: ignore
+        info["pypdf_version"] = getattr(pypdf, "__version__", "unknown")
+    except Exception as e:
+        info["pypdf_import_err"] = f"{type(e).__name__}: {e}"
+    return info
 
 
 async def _vision_ocr_image(data: bytes, mime: str = "image/jpeg") -> str:
