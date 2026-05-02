@@ -1611,6 +1611,52 @@ def _extract_text_from_image(data: bytes, mime: str) -> str:
         return ""
 
 
+def _pdf_to_images(data: bytes, max_pages: int = 8) -> list[bytes]:
+    """Render PDF pages to JPEG bytes (for vision OCR). Uses PyMuPDF (fitz)."""
+    try:
+        import fitz  # type: ignore (PyMuPDF)
+        doc = fitz.open(stream=data, filetype="pdf")
+        out = []
+        for i, page in enumerate(doc):
+            if i >= max_pages: break
+            # 150 DPI is plenty for OCR on typical clinical records
+            pm = page.get_pixmap(dpi=150)
+            out.append(pm.tobytes("jpeg"))
+        doc.close()
+        return out
+    except Exception:
+        return []
+
+
+async def _vision_ocr_image(data: bytes, mime: str = "image/jpeg") -> str:
+    """OCR via GPT vision (works without any system tesseract install)."""
+    import base64 as _b64, json as _json
+    b64 = _b64.b64encode(data).decode()
+    data_url = f"data:{mime};base64,{b64}"
+    try:
+        async with httpx.AsyncClient(timeout=90) as ai:
+            r = await ai.post(
+                "https://api.ai6700.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DATA999_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "gpt-5.4-mini",
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extract ALL visible text from this image, verbatim. Preserve line breaks, dates, dosages, numbers exactly. No summary — just the raw text."},
+                            {"type": "image_url", "image_url": {"url": data_url}},
+                        ],
+                    }],
+                },
+            )
+            if r.status_code != 200:
+                return ""
+            j = r.json()
+            return (((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    except Exception:
+        return ""
+
+
 @app.get("/api/neo-file-summary")
 async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
     """Download one of a patient's attached files server-side, extract text,
@@ -1643,9 +1689,24 @@ async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
         if "pdf" in m:
             kind = "pdf"
             text = _extract_text_from_pdf(data)
+            # Fallback: if no text extracted (scanned PDF), render pages and vision-OCR them
+            if not text.strip():
+                pages = _pdf_to_images(data, max_pages=8)
+                if pages:
+                    kind = "pdf-ocr"
+                    chunks = []
+                    for i, jpg in enumerate(pages):
+                        ocr = await _vision_ocr_image(jpg, "image/jpeg")
+                        if ocr:
+                            chunks.append(f"--- page {i+1} ---\n{ocr}")
+                    text = "\n\n".join(chunks)
         elif m.startswith("image/"):
             kind = "image"
             text = _extract_text_from_image(data, mime)
+            if not text.strip():
+                # Fallback to vision OCR
+                kind = "image-ocr"
+                text = await _vision_ocr_image(data, mime)
         elif "text" in m:
             kind = "text"
             try:
