@@ -1688,7 +1688,7 @@ async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
         if "pdf" in m:
             kind = "pdf"
             text = _extract_text_from_pdf(data)
-            # Fallback: if no text extracted (scanned PDF), render pages and vision-OCR them
+            # Fallback 1: render pages locally if PyMuPDF is available
             if not text.strip():
                 pages = _pdf_to_images(data, max_pages=8)
                 if pages:
@@ -1699,6 +1699,13 @@ async def neo_file_summary(pid: str, file_id: int, refresh: bool = False):
                         if ocr:
                             chunks.append(f"--- page {i+1} ---\n{ocr}")
                     text = "\n\n".join(chunks)
+            # Fallback 2: try sending the PDF bytes directly as a vision input
+            # (some OpenAI-compatible endpoints accept application/pdf in image_url)
+            if not text.strip():
+                ocr = await _vision_ocr_image(data, "application/pdf")
+                if ocr.strip():
+                    kind = "pdf-direct"
+                    text = ocr
         elif m.startswith("image/"):
             kind = "image"
             text = _extract_text_from_image(data, mime)
