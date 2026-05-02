@@ -202,6 +202,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .system-wrap{padding:0 8px 8px}
 .system-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;resize:none;outline:none;height:70px;font-family:inherit}
 .system-input:focus{border-color:var(--accent)}
+.priority-box{margin-top:10px;padding:8px;background:rgba(255,165,0,.05);border:1px solid rgba(255,165,0,.18);border-radius:8px}
+.priority-pills{display:flex;gap:6px}
+.priority-pill{flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--text-muted,#888);cursor:pointer;transition:all .15s}
+.priority-pill:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.priority-pill.active{background:linear-gradient(135deg,#f59e0b,#d97706);border-color:transparent;color:#fff;box-shadow:0 2px 6px rgba(245,158,11,.3)}
 .multi-mode-box{margin-top:10px;padding:8px;background:rgba(108,92,231,.06);border:1px solid rgba(108,92,231,.2);border-radius:8px}
 .multi-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text);font-weight:500}
 .multi-toggle input{cursor:pointer;accent-color:#6c5ce7}
@@ -456,6 +461,19 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div v-if="activeCategory==='chat'" class="system-wrap">
       <div class="section-label">系统提示词</div>
       <textarea class="system-input" v-model="chatSystem" placeholder="可选：设置AI角色..."></textarea>
+      <div class="priority-box">
+        <div class="section-label" style="padding:0 0 6px;font-size:11px">渠道策略</div>
+        <div class="priority-pills">
+          <button :class="['priority-pill', {active: chatPriority==='成功率优先'}]"
+                  @click="chatPriority='成功率优先'" title="优先使用稳定渠道">
+            🛡️ 成功率优先
+          </button>
+          <button :class="['priority-pill', {active: chatPriority==='价格优先'}]"
+                  @click="chatPriority='价格优先'" title="优先使用便宜渠道（可能稍慢）">
+            💰 价格优先
+          </button>
+        </div>
+      </div>
       <div class="multi-mode-box">
         <label class="multi-toggle">
           <input type="checkbox" v-model="multiMode" />
@@ -1521,6 +1539,7 @@ createApp({
     const chatStreaming = ref('')
     const chatSystem = ref('')
     const chatHistories = reactive({}) // per-model: { modelId: {messages:[], system:''} }
+    const chatPriority  = ref('成功率优先')   // '成功率优先' | '价格优先' (data999 渠道分组策略)
     // ── 多模型协作 state ──
     const multiMode       = ref(false)
     const multiModels     = ref(['claude-opus-4-7', 'gpt-5.4'])
@@ -2317,6 +2336,7 @@ createApp({
             summarizer: multiSummarizer.value,
             system: chatSystem.value || null,
             history,
+            priority: chatPriority.value,
           }),
         })
         if (!r.ok) {
@@ -2365,6 +2385,7 @@ createApp({
             system: chatSystem.value || null,
             web_search: webSearch.value,
             enable_thinking: deepThink.value,
+            priority: chatPriority.value,
           })
         })
         if (!resp.ok) throw new Error('请求失败 ' + resp.status)
@@ -2978,7 +2999,7 @@ createApp({
     return {
       activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
-      CHAT_MODELS, multiMode, multiModels, multiSummarizer, multiLoading, multiLoadingText,
+      CHAT_MODELS, multiMode, multiModels, multiSummarizer, multiLoading, multiLoadingText, chatPriority,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount, worksSearch,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
       selectedRole, rolePopover, rolePopoverPos, rolePopoverStyle, toggleRole, VIDEO_ROLES,

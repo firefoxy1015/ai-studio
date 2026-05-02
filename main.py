@@ -122,6 +122,7 @@ class ChatRequest(BaseModel):
     system: Optional[str] = None
     web_search: bool = False
     enable_thinking: bool = False
+    priority: str = "成功率优先"  # "成功率优先" | "价格优先" — lingkeai 渠道分组策略
 
 
 class GenerateRequest(BaseModel):
@@ -220,10 +221,11 @@ def _lingkeai_body(req: ChatRequest, model_id: int) -> tuple[dict, dict]:
         "token": _encode_lingkeai_token(),
     }
     max_tokens = 1500 if req.model in REASONING_MODELS else 8192
+    strategy = req.priority if req.priority in ("成功率优先", "价格优先") else "成功率优先"
     body = {
         "模型id": model_id,
         "用户消息": user_msg,
-        "渠道分组策略": "成功率优先",
+        "渠道分组策略": strategy,
         "对话组id": group_id,
         "生成参数": {
             "web_search": req.web_search,
@@ -314,16 +316,17 @@ class MultiChatRequest(BaseModel):
     summarizer: str = "claude-opus-4-7"  # judge model
     system: Optional[str] = None
     history: List[Message] = []          # prior turns (optional)
+    priority: str = "成功率优先"          # "成功率优先" | "价格优先"
 
 
-async def _one_shot_lingkeai(model_key: str, messages: List[Message], system: Optional[str]) -> tuple[str, str]:
+async def _one_shot_lingkeai(model_key: str, messages: List[Message], system: Optional[str], priority: str = "成功率优先") -> tuple[str, str]:
     """Single-call helper for parallel fan-out. Returns (model_key, text or error)."""
     try:
         model_id = LINGKEAI_MODEL_IDS.get(model_key)
         if not model_id:
             return model_key, f"[模型 {model_key} 不支持]"
         req = ChatRequest(model=model_key, messages=messages, system=system,
-                          web_search=False, enable_thinking=False)
+                          web_search=False, enable_thinking=False, priority=priority)
         full = ""
         async for chunk in _stream_lingkeai(req):
             if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
@@ -348,7 +351,7 @@ async def chat_multi(req: MultiChatRequest):
     msgs = list(req.history) + [Message(role="user", content=req.question)]
     # Fan out in parallel
     results = await _asyncio.gather(
-        *[_one_shot_lingkeai(m, msgs, req.system) for m in req.models],
+        *[_one_shot_lingkeai(m, msgs, req.system, req.priority) for m in req.models],
         return_exceptions=False,
     )
     responses = {k: v for (k, v) in results}
@@ -367,7 +370,7 @@ async def chat_multi(req: MultiChatRequest):
         model=req.summarizer,
         messages=[Message(role="user", content=summarizer_prompt)],
         system="你是综合分析专家，擅长从多个 AI 模型的回答中提炼最佳答案。",
-        web_search=False, enable_thinking=False,
+        web_search=False, enable_thinking=False, priority=req.priority,
     )
     summary = ""
     try:
