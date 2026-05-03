@@ -207,6 +207,19 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .priority-pill{flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--text-muted,#888);cursor:pointer;transition:all .15s}
 .priority-pill:hover{background:rgba(255,255,255,.06);color:var(--text)}
 .priority-pill.active{background:linear-gradient(135deg,#f59e0b,#d97706);border-color:transparent;color:#fff;box-shadow:0 2px 6px rgba(245,158,11,.3)}
+/* AI prompt helper */
+.ai-helper-bar{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+.ai-helper-toggle{padding:4px 10px;font-size:11px;font-weight:600;border-radius:14px;border:1px solid rgba(168,85,247,.4);background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(236,72,153,.08));color:#c084fc;cursor:pointer;transition:all .15s;white-space:nowrap}
+.ai-helper-toggle:hover{background:linear-gradient(135deg,rgba(168,85,247,.22),rgba(236,72,153,.16));color:#e9d5ff;border-color:rgba(168,85,247,.7)}
+.ai-helper-hint{font-size:11px;color:var(--text-muted,#888);font-style:italic}
+.ai-helper-panel{margin:6px 0 8px;padding:10px;background:linear-gradient(135deg,rgba(168,85,247,.06),rgba(236,72,153,.03));border:1px solid rgba(168,85,247,.25);border-radius:8px;display:flex;flex-direction:column;gap:8px}
+.ai-helper-input{width:100%;padding:8px 10px;font-size:12px;border-radius:6px;border:1px solid rgba(168,85,247,.25);background:rgba(0,0,0,.2);color:var(--text);resize:vertical;min-height:40px;font-family:inherit;box-sizing:border-box}
+.ai-helper-input:focus{outline:none;border-color:rgba(168,85,247,.6)}
+.ai-helper-row{display:flex;gap:8px;align-items:center}
+.ai-helper-select{flex:1;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);color:var(--text);cursor:pointer}
+.ai-helper-go{padding:5px 14px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;cursor:pointer;white-space:nowrap;transition:all .15s}
+.ai-helper-go:hover:not(:disabled){background:linear-gradient(135deg,#9333ea,#db2777);box-shadow:0 2px 8px rgba(168,85,247,.4)}
+.ai-helper-go:disabled{opacity:.5;cursor:not-allowed}
 .multi-mode-box{margin-top:10px;padding:8px;background:rgba(108,92,231,.06);border:1px solid rgba(108,92,231,.2);border-radius:8px}
 .multi-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text);font-weight:500}
 .multi-toggle input{cursor:pointer;accent-color:#6c5ce7}
@@ -1195,6 +1208,30 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <!-- Prompt + send -->
       <div class="input-row">
         <div class="textarea-wrap">
+          <!-- AI Prompt Helper (image/video/music only) -->
+          <div v-if="activeCategory!=='chat' && selectedModel" class="ai-helper-bar">
+            <button class="ai-helper-toggle" @click="aiHelperOpen=!aiHelperOpen" type="button">
+              ✨ {{ aiHelperOpen ? '收起' : 'AI 帮我写 Prompt' }}
+            </button>
+            <span class="ai-helper-hint" v-if="!aiHelperOpen">不知道写啥？让 AI 根据「{{selectedModel.name}}」特长帮你写</span>
+          </div>
+          <div v-if="aiHelperOpen && activeCategory!=='chat'" class="ai-helper-panel">
+            <textarea class="ai-helper-input" v-model="aiHelperIdea"
+              placeholder="用大白话告诉我你想要什么，例如「夕阳下的山顶有一只孤独的狼」"
+              @keydown.enter.exact.prevent="aiWritePrompt"
+              rows="2"></textarea>
+            <div class="ai-helper-row">
+              <select class="ai-helper-select" v-model="aiHelperModel" :disabled="aiHelperLoading">
+                <option value="deepseek-v3.2">DeepSeek V3.2 (创意+性价比)</option>
+                <option value="gemini-3.1-flash-lite-preview">Gemini Flash Lite (极速)</option>
+                <option value="gpt-5.4-mini">GPT-5.4 Mini (均衡)</option>
+                <option value="kimi-k2.5">Kimi K2.5 (中文创意)</option>
+              </select>
+              <button class="ai-helper-go" @click="aiWritePrompt" :disabled="aiHelperLoading || !aiHelperIdea.trim()">
+                {{ aiHelperLoading ? '✨ 生成中...' : '✨ 帮我写' }}
+              </button>
+            </div>
+          </div>
           <textarea class="prompt-input"
             v-model="promptText"
             :placeholder="inputPlaceholder"
@@ -1604,6 +1641,11 @@ createApp({
     const chatSystem = ref('')
     const chatHistories = reactive({}) // per-model: { modelId: {messages:[], system:''} }
     const chatPriority  = ref('成功率优先')   // '成功率优先' | '价格优先' (data999 渠道分组策略)
+    // ── AI Prompt Helper state ──
+    const aiHelperOpen    = ref(false)
+    const aiHelperIdea    = ref('')
+    const aiHelperModel   = ref('deepseek-v3.2')   // deepwl 直连，性价比高
+    const aiHelperLoading = ref(false)
     // ── 多模型协作 state ──
     const multiMode       = ref(false)
     const multiModels     = ref(['claude-opus-4-7', 'gpt-5.4'])
@@ -2539,6 +2581,61 @@ createApp({
       await new Promise(r => setTimeout(r, 500)); modal.stage = 3
     }
 
+    async function aiWritePrompt() {
+      if (aiHelperLoading.value || !aiHelperIdea.value.trim()) return
+      const m = selectedModel.value
+      if (!m) return
+      const cat = activeCategory.value
+      const idea = aiHelperIdea.value.trim()
+      // 类别相关的写作策略
+      const catGuide = {
+        image: '图片提示词。使用英文输出（除非用户明确要中文文字渲染）。包含主体/构图/光影/色调/风格/细节，60-100 字。',
+        video: '视频提示词。使用英文输出。包含主体/动作/镜头运动（推/拉/摇/移）/光影氛围/时长节奏，60-120 字。',
+        music: '音乐生成描述。中英文均可。包含曲风/乐器/情绪/节奏 BPM/编曲思路，30-80 字。',
+      }[cat] || '提示词，60-100 字。'
+      const sys =
+        `你是顶级 prompt 工程专家，专门为 AI 生成模型「${m.name}」写提示词。\n` +
+        `这个模型的特长：${m.desc || '通用模型'}\n\n` +
+        `任务：把用户的简单想法转写成最能发挥这个模型特长的 ${catGuide}\n\n` +
+        `严格要求：\n` +
+        `1. 直接输出最终提示词，不要解释、不要前缀、不要 "Here is the prompt:" 之类\n` +
+        `2. 不要用 markdown 代码块包裹\n` +
+        `3. 每个词都有信息量，避免堆砌空泛形容词\n` +
+        `4. 针对这个模型已知的强项做适配（如果是写实模型→具体场景细节；如果是文字渲染模型→明确文字内容；如果是动作模型→精准镜头描述）`
+      aiHelperLoading.value = true
+      try {
+        const r = await fetch('/api/chat/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: aiHelperModel.value,
+            source: 'deepwl',  // 4 个备选都是 deepwl ⚡ 直连
+            messages: [{ role: 'user', content: idea }],
+            system: sys,
+            web_search: false,
+            enable_thinking: false,
+          })
+        })
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}))
+          throw new Error(err.detail || ('HTTP ' + r.status))
+        }
+        const data = await r.json()
+        const result = (data.text || '').trim().replace(/^```[\w]*\n?|\n?```$/g, '').trim()
+        if (!result) throw new Error('AI 返回空内容')
+        // 填入主输入框
+        promptText.value = result
+        aiHelperIdea.value = ''
+        aiHelperOpen.value = false
+        await nextTick()
+        autoResize()
+      } catch (e) {
+        alert('AI 写 prompt 失败: ' + e.message)
+      } finally {
+        aiHelperLoading.value = false
+      }
+    }
+
     async function openDirectorModal(rawPrompt) {
       directorModal.value = { role: selectedRole.value, stage: 0, result: null, pendingPrompt: rawPrompt }
       const modal = directorModal.value
@@ -3072,6 +3169,7 @@ createApp({
       activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
       CHAT_MODELS, multiMode, multiModels, multiSummarizer, multiLoading, multiLoadingText, chatPriority,
+      aiHelperOpen, aiHelperIdea, aiHelperModel, aiHelperLoading, aiWritePrompt,
       completedWorks, filteredWorks, worksFilter, worksFilters, worksCount, worksSearch,
       promptText, lyricsText, webSearch, deepThink, refs, paramRatio, paramDuration, paramMode, paramMusicType,
       selectedRole, rolePopover, rolePopoverPos, rolePopoverStyle, toggleRole, VIDEO_ROLES,
