@@ -129,6 +129,7 @@ class ChatRequest(BaseModel):
     web_search: bool = False
     enable_thinking: bool = False
     priority: str = "成功率优先"  # "成功率优先" | "价格优先" — lingkeai 渠道分组策略
+    source: Optional[str] = None  # "deepwl" → 走 deepwl 直连快速通道；其余 → lingkeai
 
 
 class GenerateRequest(BaseModel):
@@ -275,8 +276,52 @@ async def _stream_lingkeai(req: ChatRequest):
     yield "data: [DONE]\n\n"
 
 
-async def _stream_lingkeai_only(req: ChatRequest):
-    """Call lingkeai only — no fallback to DATA999 key."""
+async def _stream_deepwl(req: ChatRequest):
+    """Call deepwl OpenAI-compatible streaming chat."""
+    msgs = []
+    if req.system:
+        msgs.append({"role": "system", "content": req.system})
+    for m in req.messages:
+        msgs.append({"role": m.role, "content": m.content})
+    body = {"model": req.model, "messages": msgs, "stream": True}
+    got_text = False
+    async with http().stream(
+        "POST", f"{DEEPWL_BASE}/v1/chat/completions",
+        headers={"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"},
+        json=body, timeout=300,
+    ) as r:
+        if r.status_code != 200:
+            err_text = (await r.aread()).decode("utf-8", "ignore")
+            raise Exception(f"deepwl HTTP {r.status_code}: {err_text[:200]}")
+        async for line in r.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            s = line[5:].strip()
+            if s == "[DONE]":
+                break
+            try:
+                d = json.loads(s)
+                text = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                if text:
+                    got_text = True
+                    yield f"data: {json.dumps({'text': text})}\n\n"
+            except json.JSONDecodeError:
+                pass
+    if not got_text:
+        raise Exception("deepwl returned empty response")
+    yield "data: [DONE]\n\n"
+
+
+async def _stream_chat_router(req: ChatRequest):
+    """Route to deepwl or lingkeai based on req.source."""
+    if req.source == "deepwl":
+        try:
+            async for chunk in _stream_deepwl(req):
+                yield chunk
+        except Exception as e:
+            yield f"data: {json.dumps({'text': f'[deepwl 失败: {e}]'})}\n\n"
+            yield "data: [DONE]\n\n"
+        return
     model_id = LINGKEAI_MODEL_IDS.get(req.model)
     if not model_id:
         yield f"data: {json.dumps({'text': f'模型 {req.model} 暂不支持，请联系管理员'})}\n\n"
@@ -284,6 +329,10 @@ async def _stream_lingkeai_only(req: ChatRequest):
         return
     async for chunk in _stream_lingkeai(req):
         yield chunk
+
+
+# Backward-compat alias
+_stream_lingkeai_only = _stream_chat_router
 
 
 # ── API endpoints ────────────────────────────────────────────────────────────
@@ -299,50 +348,66 @@ async def chat(req: ChatRequest):
 
 @app.post("/api/chat/sync")
 async def chat_sync(req: ChatRequest):
-    """Sync wrapper — lingkeai only, no DATA999 key."""
-    model_id = LINGKEAI_MODEL_IDS.get(req.model)
-    if not model_id:
-        raise HTTPException(400, detail=f"模型 {req.model} 暂不支持")
+    """Sync wrapper — supports deepwl and lingkeai."""
+    if req.source != "deepwl":
+        if not LINGKEAI_MODEL_IDS.get(req.model):
+            raise HTTPException(400, detail=f"模型 {req.model} 暂不支持")
     full = ""
-    async for chunk in _stream_lingkeai(req):
+    gen = _stream_deepwl(req) if req.source == "deepwl" else _stream_lingkeai(req)
+    async for chunk in gen:
         if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
             try:
                 full += json.loads(chunk[6:].strip()).get("text", "")
             except Exception:
                 pass
     if not full:
-        raise HTTPException(503, detail=f"lingkeai 返回空响应")
+        raise HTTPException(503, detail="返回空响应")
     return {"text": full}
 
 
 # ── Multi-model collaboration (data999 大模型 旗舰功能) ──
+class MultiModelRef(BaseModel):
+    model: str
+    source: Optional[str] = None
+    label: Optional[str] = None  # display ID (may differ from model when ⚡ variant)
+
+
 class MultiChatRequest(BaseModel):
     question: str
-    models: List[str]                    # 2-4 model IDs to fan out to
-    summarizer: str = "claude-opus-4-7"  # judge model
+    models: List[Any]                    # list of strings (legacy) or {model, source, label}
+    summarizer: Any = "claude-opus-4-7"  # str (legacy) or {model, source}
     system: Optional[str] = None
-    history: List[Message] = []          # prior turns (optional)
-    priority: str = "成功率优先"          # "成功率优先" | "价格优先"
+    history: List[Message] = []
+    priority: str = "成功率优先"
 
 
-async def _one_shot_lingkeai(model_key: str, messages: List[Message], system: Optional[str], priority: str = "成功率优先") -> tuple[str, str]:
-    """Single-call helper for parallel fan-out. Returns (model_key, text or error)."""
+def _normalize_multi_ref(item) -> MultiModelRef:
+    if isinstance(item, str):
+        return MultiModelRef(model=item, source=None, label=item)
+    if isinstance(item, dict):
+        return MultiModelRef(model=item["model"], source=item.get("source"), label=item.get("label") or item["model"])
+    raise HTTPException(400, detail=f"无效的模型引用: {item}")
+
+
+async def _one_shot(ref: MultiModelRef, messages: List[Message], system: Optional[str], priority: str = "成功率优先") -> tuple[str, str]:
+    """Single-call helper for parallel fan-out. Returns (display_label, text or error)."""
+    label = ref.label or ref.model
     try:
-        model_id = LINGKEAI_MODEL_IDS.get(model_key)
-        if not model_id:
-            return model_key, f"[模型 {model_key} 不支持]"
-        req = ChatRequest(model=model_key, messages=messages, system=system,
+        if ref.source != "deepwl" and not LINGKEAI_MODEL_IDS.get(ref.model):
+            return label, f"[模型 {ref.model} 不支持]"
+        req = ChatRequest(model=ref.model, source=ref.source, messages=messages, system=system,
                           web_search=False, enable_thinking=False, priority=priority)
         full = ""
-        async for chunk in _stream_lingkeai(req):
+        gen = _stream_deepwl(req) if ref.source == "deepwl" else _stream_lingkeai(req)
+        async for chunk in gen:
             if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
                 try:
                     full += json.loads(chunk[6:].strip()).get("text", "")
                 except Exception:
                     pass
-        return model_key, full or "[空响应]"
+        return label, full or "[空响应]"
     except Exception as e:
-        return model_key, f"[错误: {str(e)[:200]}]"
+        return label, f"[错误: {str(e)[:200]}]"
 
 
 @app.post("/api/chat/multi")
@@ -353,16 +418,18 @@ async def chat_multi(req: MultiChatRequest):
         raise HTTPException(400, detail="多模型协作至少需要 2 个模型")
     if len(req.models) > 4:
         raise HTTPException(400, detail="最多 4 个模型并行")
-    # Build conversation messages (history + current question)
+    refs = [_normalize_multi_ref(m) for m in req.models]
+    summarizer_ref = _normalize_multi_ref(req.summarizer)
+    # Build conversation messages
     msgs = list(req.history) + [Message(role="user", content=req.question)]
     # Fan out in parallel
     results = await _asyncio.gather(
-        *[_one_shot_lingkeai(m, msgs, req.system, req.priority) for m in req.models],
+        *[_one_shot(r, msgs, req.system, req.priority) for r in refs],
         return_exceptions=False,
     )
     responses = {k: v for (k, v) in results}
     # Build summarizer prompt
-    parts = [f"用户问题：{req.question}\n\n以下是 {len(req.models)} 个不同模型对该问题的回答："]
+    parts = [f"用户问题：{req.question}\n\n以下是 {len(refs)} 个不同模型对该问题的回答："]
     for i, (k, v) in enumerate(results, 1):
         parts.append(f"\n──── 模型 {i} ({k}) 的回答 ────\n{v}")
     parts.append(
@@ -373,14 +440,16 @@ async def chat_multi(req: MultiChatRequest):
     )
     summarizer_prompt = "".join(parts)
     summarizer_req = ChatRequest(
-        model=req.summarizer,
+        model=summarizer_ref.model,
+        source=summarizer_ref.source,
         messages=[Message(role="user", content=summarizer_prompt)],
         system="你是综合分析专家，擅长从多个 AI 模型的回答中提炼最佳答案。",
         web_search=False, enable_thinking=False, priority=req.priority,
     )
     summary = ""
     try:
-        async for chunk in _stream_lingkeai(summarizer_req):
+        gen = _stream_deepwl(summarizer_req) if summarizer_ref.source == "deepwl" else _stream_lingkeai(summarizer_req)
+        async for chunk in gen:
             if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
                 try:
                     summary += json.loads(chunk[6:].strip()).get("text", "")
@@ -388,7 +457,7 @@ async def chat_multi(req: MultiChatRequest):
                     pass
     except Exception as e:
         summary = f"[总结失败: {str(e)[:200]}]"
-    return {"responses": responses, "summary": summary or "[空响应]", "summarizer": req.summarizer}
+    return {"responses": responses, "summary": summary or "[空响应]", "summarizer": summarizer_ref.label or summarizer_ref.model}
 
 
 _DIRECTOR_SHOTS = [

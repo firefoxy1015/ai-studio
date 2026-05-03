@@ -1340,6 +1340,32 @@ const { createApp, ref, computed, reactive, nextTick, onMounted, watch, watchEff
 // ── Model definitions ─────────────────────────────────────────────────────
 
 const CHAT_MODELS = [
+  // ── Deepwl 直连快速通道 ⚡ (放在最前) ──
+  { id:'gpt-5.5⚡',            apiId:'gpt-5.5',           source:'deepwl',
+    name:'GPT-5.5 ⚡',          desc:'⚡deepwl 直连，速度更快·OpenAI 协议', icon:'⬡', bg:'linear-gradient(135deg,#16a34a,#14532d)' },
+  { id:'gpt-5.4⚡',            apiId:'gpt-5.4',           source:'deepwl',
+    name:'GPT-5.4 ⚡',          desc:'⚡deepwl 直连版',                   icon:'⬡', bg:'linear-gradient(135deg,#15803d,#14532d)' },
+  { id:'gpt-5.4-mini⚡',       apiId:'gpt-5.4-mini',      source:'deepwl',
+    name:'GPT-5.4 Mini ⚡',     desc:'⚡deepwl 直连版，便宜快',           icon:'⬡', bg:'linear-gradient(135deg,#166534,#14532d)' },
+  { id:'gemini-3.1-pro-preview⚡', apiId:'gemini-3.1-pro-preview', source:'deepwl',
+    name:'Gemini 3.1 Pro ⚡',   desc:'⚡deepwl 直连，谷歌旗舰',           icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)' },
+  { id:'gemini-3.1-flash-lite-preview⚡', apiId:'gemini-3.1-flash-lite-preview', source:'deepwl',
+    name:'Gemini 3.1 Flash Lite ⚡', desc:'🆕⚡ 极速轻量，性价比之王',       icon:'✿', bg:'linear-gradient(135deg,#1d4ed8,#1e3a8a)' },
+  { id:'gemini-3-flash-preview⚡', apiId:'gemini-3-flash-preview', source:'deepwl',
+    name:'Gemini 3 Flash ⚡',   desc:'⚡deepwl 直连，快速版',             icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)' },
+  { id:'grok-4-2⚡',           apiId:'grok-4-2',          source:'deepwl',
+    name:'Grok 4.2 ⚡',         desc:'⚡deepwl 直连，xAI 旗舰',           icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)' },
+  { id:'deepseek-v3.2⚡',      apiId:'deepseek-v3.2',     source:'deepwl',
+    name:'DeepSeek V3.2 ⚡',    desc:'⚡deepwl 直连，开源旗舰',           icon:'◇', bg:'linear-gradient(135deg,#0284c7,#0c4a6e)' },
+  { id:'glm-5⚡',              apiId:'glm-5',             source:'deepwl',
+    name:'GLM-5 ⚡',            desc:'⚡deepwl 直连，智谱新一代',         icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)' },
+  { id:'kimi-k2.5⚡',          apiId:'kimi-k2.5',         source:'deepwl',
+    name:'Kimi K2.5 ⚡',        desc:'⚡deepwl 直连，月之暗面',           icon:'◉', bg:'linear-gradient(135deg,#a855f7,#581c87)' },
+  { id:'MiniMax-M2.5⚡',       apiId:'MiniMax-M2.5',      source:'deepwl',
+    name:'MiniMax M2.5 ⚡',     desc:'⚡deepwl 直连，MiniMax 新模型',     icon:'◆', bg:'linear-gradient(135deg,#ec4899,#831843)' },
+  { id:'qwen3.5-plus⚡',       apiId:'qwen3.5-plus',      source:'deepwl',
+    name:'Qwen 3.5 Plus ⚡',    desc:'⚡deepwl 直连，通义千问',           icon:'◎', bg:'linear-gradient(135deg,#f59e0b,#78350f)' },
+  // ── Lingkeai 通道 ──
   { id:'claude-sonnet-4-6',   name:'Sonnet 4.6',        desc:'均衡性能，日常使用首选',              icon:'✦', bg:'linear-gradient(135deg,#b45309,#78350f)' },
   { id:'claude-opus-4-7',     name:'Claude Opus 4.7',    desc:'⚡最强Claude·逆向直连·速度更快',       icon:'◆', bg:'linear-gradient(135deg,#d97706,#92400e)' },
   { id:'gpt-5.5',             name:'GPT-5.5',            desc:'🆕 新一代旗舰，对话/多模态/代码全面提升', icon:'⬡', bg:'linear-gradient(135deg,#22c55e,#065f46)' },
@@ -1355,6 +1381,24 @@ const CHAT_MODELS = [
 ]
 
 const IMAGE_MODELS = [
+  // ── Deepwl 直连快速通道 ⚡ (放在最前) ──
+  { id:'gpt-image-2-deepwl',   apiId:'gpt-image-2',       source:'deepwl',
+    name:'GPT Image 2 ⚡',      desc:'⚡deepwl 直连，OpenAI 协议 (chat 接口出图)', icon:'⬡', bg:'linear-gradient(135deg,#16a34a,#14532d)' },
+  { id:'gpt-image-2-all-deepwl', apiId:'gpt-image-2-all', source:'deepwl',
+    name:'GPT Image 2 All ⚡',  desc:'🆕⚡ deepwl 全功能版 (multi-output)', icon:'⬡', bg:'linear-gradient(135deg,#15803d,#14532d)' },
+  { id:'gpt-image-1.5-deepwl', apiId:'gpt-image-1.5',     source:'deepwl',
+    name:'GPT Image 1.5 ⚡',    desc:'⚡deepwl 直连版',                   icon:'⬡', bg:'linear-gradient(135deg,#166534,#14532d)' },
+  { id:'gemini-3-pro-image-preview-4K-deepwl', apiId:'gemini-3-pro-image-preview-4K', source:'deepwl',
+    name:'Nano Banana Pro 4K ⚡', desc:'⚡deepwl 直连，4K 超清出图',      icon:'✿', bg:'linear-gradient(135deg,#2563eb,#1e3a8a)' },
+  { id:'gemini-3.1-flash-image-preview-deepwl', apiId:'gemini-3.1-flash-image-preview', source:'deepwl',
+    name:'Nano Banana 2 ⚡',    desc:'⚡deepwl 直连，速度版',             icon:'✿', bg:'linear-gradient(135deg,#3b82f6,#1e3a8a)' },
+  { id:'doubao-seedream-5-0-deepwl', apiId:'doubao-seedream-5-0-260128', source:'deepwl',
+    name:'即梦 5.0 ⚡',          desc:'⚡deepwl 直连版',                   icon:'✦', bg:'linear-gradient(135deg,#f59e0b,#78350f)' },
+  { id:'doubao-seedream-4-5-deepwl', apiId:'doubao-seedream-4-5-251128', source:'deepwl',
+    name:'即梦 4.5 ⚡',          desc:'⚡deepwl 直连版',                   icon:'✦', bg:'linear-gradient(135deg,#d97706,#7c2d12)' },
+  { id:'grok-4-2-image-deepwl', apiId:'grok-4-2-image',   source:'deepwl',
+    name:'Grok 图像 4.2 ⚡',    desc:'⚡deepwl 直连版',                   icon:'⚡', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)' },
+  // ── Data999 通道 ──
   { id:'grok-4.2-image',      name:'Grok 图像 4.2',     desc:'⭐写实油画最强，固定出2张',            icon:'◎', bg:'linear-gradient(135deg,#7c3aed,#4c1d95)',
     paramDefs: { size:{type:'select',label:'尺寸',opts:['1080x1920','1920x1080','1080x1080','720x1280','1280x720'],def:'1080x1080'} } },
   { id:'kling-image-o1',      name:'可灵 Image o1',      desc:'⭐人物一致性最好，像素级改图',          icon:'◈', bg:'linear-gradient(135deg,#0891b2,#164e63)' },
@@ -2352,8 +2396,14 @@ createApp({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             question: text,
-            models: [...multiModels.value],
-            summarizer: multiSummarizer.value,
+            models: multiModels.value.map(id => {
+              const m = ALL_MODELS_MAP[id] || {}
+              return { model: m.apiId || id, source: m.source || null, label: id }
+            }),
+            summarizer: (function() {
+              const m = ALL_MODELS_MAP[multiSummarizer.value] || {}
+              return { model: m.apiId || multiSummarizer.value, source: m.source || null }
+            })(),
             system: chatSystem.value || null,
             history,
             priority: chatPriority.value,
@@ -2396,11 +2446,13 @@ createApp({
       scrollBottom()
 
       try {
+        const _m = ALL_MODELS_MAP[modelId] || {}
         const resp = await fetch('/api/chat', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            model: modelId,
+            model: _m.apiId || modelId,
+            source: _m.source || null,
             messages: chatMessages.value,
             system: chatSystem.value || null,
             web_search: webSearch.value,
