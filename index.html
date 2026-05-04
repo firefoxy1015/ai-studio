@@ -2628,7 +2628,10 @@ createApp({
         aiHelperIdea.value = ''
         aiHelperOpen.value = false
         await nextTick()
-        autoResize()
+        if (promptEl.value) {
+          promptEl.value.style.height = 'auto'
+          promptEl.value.style.height = Math.min(promptEl.value.scrollHeight, 160) + 'px'
+        }
       } catch (e) {
         alert('AI 写 prompt 失败: ' + e.message)
       } finally {
