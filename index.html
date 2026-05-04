@@ -62,6 +62,22 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:12px}
 .empty-icon{font-size:48px;opacity:.4}
 .empty-text{font-size:14px}
+/* Model guide card (shown in empty state when a model is selected) */
+.model-guide{max-width:680px;width:90%;margin:auto;padding:24px 28px;background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(168,85,247,.04));border:1px solid rgba(168,85,247,.18);border-radius:14px;color:var(--text);box-shadow:0 4px 24px rgba(0,0,0,.2)}
+.model-guide-head{display:flex;align-items:center;gap:14px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.06)}
+.model-guide-icon{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;flex-shrink:0}
+.model-guide-title{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.model-guide-name{font-size:18px;font-weight:700;color:var(--text)}
+.model-guide-desc{font-size:12px;color:var(--text-muted,#999);line-height:1.4}
+.model-guide-section{margin-bottom:14px}
+.model-guide-section:last-child{margin-bottom:0}
+.model-guide-label{font-size:11px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.model-guide-content{font-size:13px;line-height:1.65;color:var(--text);opacity:.92}
+.model-guide-tags{display:flex;flex-wrap:wrap;gap:6px}
+.model-guide-tag{padding:3px 10px;font-size:11px;border-radius:12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);color:#c084fc}
+.model-guide-tag.avoid{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#fca5a5}
+.empty-state:has(.model-guide){padding:40px 20px;display:block}
+.model-guide-tip{margin-top:12px;padding:10px 12px;background:rgba(245,158,11,.06);border-left:3px solid #f59e0b;border-radius:4px;font-size:12px;color:var(--text);opacity:.85;line-height:1.55}
 
 /* History cards */
 .gen-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
@@ -604,8 +620,36 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <!-- CHAT mode -->
       <template v-if="activeCategory==='chat'">
         <div v-if="chatMessages.length===0" class="empty-state">
-          <div class="empty-icon">💬</div>
-          <div class="empty-text">选择左侧模型，开始对话</div>
+          <div v-if="currentGuide && selectedModel" class="model-guide">
+            <div class="model-guide-head">
+              <div class="model-guide-icon" :style="{background:selectedModel.bg||'linear-gradient(135deg,#6366f1,#312e81)'}">{{selectedModel.icon}}</div>
+              <div class="model-guide-title">
+                <div class="model-guide-name">{{selectedModel.name}}</div>
+                <div class="model-guide-desc">{{selectedModel.desc}}</div>
+              </div>
+            </div>
+            <div class="model-guide-section">
+              <div class="model-guide-label">⭐ 擅长</div>
+              <div class="model-guide-content">{{currentGuide.strengths}}</div>
+            </div>
+            <div class="model-guide-section" v-if="currentGuide.best && currentGuide.best.length">
+              <div class="model-guide-label">✅ 最佳场景</div>
+              <div class="model-guide-tags">
+                <span class="model-guide-tag" v-for="b in currentGuide.best" :key="b">{{b}}</span>
+              </div>
+            </div>
+            <div class="model-guide-section" v-if="currentGuide.avoid && currentGuide.avoid.length">
+              <div class="model-guide-label">⚠ 不建议</div>
+              <div class="model-guide-tags">
+                <span class="model-guide-tag avoid" v-for="a in currentGuide.avoid" :key="a">{{a}}</span>
+              </div>
+            </div>
+            <div class="model-guide-tip" v-if="currentGuide.tip">💡 {{currentGuide.tip}}</div>
+          </div>
+          <template v-else>
+            <div class="empty-icon">💬</div>
+            <div class="empty-text">选择左侧模型，开始对话</div>
+          </template>
         </div>
         <div class="chat-messages">
           <template v-for="(msg,i) in chatMessages" :key="i">
@@ -1008,8 +1052,36 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <!-- GENERATION mode -->
       <template v-else>
         <div v-if="currentGenerations.length===0" class="empty-state">
-          <div class="empty-icon">{{ activeCategory==='image'?'🖼️':activeCategory==='video'?'🎬':'🎵' }}</div>
-          <div class="empty-text">在下方输入描述，点击发送开始生成</div>
+          <div v-if="currentGuide && selectedModel" class="model-guide">
+            <div class="model-guide-head">
+              <div class="model-guide-icon" :style="{background:selectedModel.bg||'linear-gradient(135deg,#6366f1,#312e81)'}">{{selectedModel.icon}}</div>
+              <div class="model-guide-title">
+                <div class="model-guide-name">{{selectedModel.name}}</div>
+                <div class="model-guide-desc">{{selectedModel.desc}}</div>
+              </div>
+            </div>
+            <div class="model-guide-section">
+              <div class="model-guide-label">⭐ 擅长</div>
+              <div class="model-guide-content">{{currentGuide.strengths}}</div>
+            </div>
+            <div class="model-guide-section" v-if="currentGuide.best && currentGuide.best.length">
+              <div class="model-guide-label">✅ 最佳场景</div>
+              <div class="model-guide-tags">
+                <span class="model-guide-tag" v-for="b in currentGuide.best" :key="b">{{b}}</span>
+              </div>
+            </div>
+            <div class="model-guide-section" v-if="currentGuide.avoid && currentGuide.avoid.length">
+              <div class="model-guide-label">⚠ 不建议</div>
+              <div class="model-guide-tags">
+                <span class="model-guide-tag avoid" v-for="a in currentGuide.avoid" :key="a">{{a}}</span>
+              </div>
+            </div>
+            <div class="model-guide-tip" v-if="currentGuide.tip">💡 {{currentGuide.tip}}</div>
+          </div>
+          <template v-else>
+            <div class="empty-icon">{{ activeCategory==='image'?'🖼️':activeCategory==='video'?'🎬':'🎵' }}</div>
+            <div class="empty-text">在下方输入描述，点击发送开始生成</div>
+          </template>
         </div>
         <div v-for="(g, gi) in currentGenerations" :key="g.id" class="gen-card">
           <div class="gen-card-header">
@@ -1575,6 +1647,79 @@ const MUSIC_MODELS = [
 
 const ALL_MODELS_MAP = {}
 ;[...CHAT_MODELS,...IMAGE_MODELS,...VIDEO_MODELS,...MUSIC_MODELS].forEach(m => ALL_MODELS_MAP[m.id]=m)
+
+// ── Model usage guide ── (key 用 model.id；⚡ 变体共享主 ID 的 guide)
+const MODEL_GUIDES = {
+  // ─────── 聊天 ───────
+  'claude-sonnet-4-6': { strengths:'代码理解+长文写作+逻辑推理均衡，最稳的日常多面手', best:['日常问答','文档总结','代码审阅','头脑风暴'], avoid:['实时新闻（无联网）','超复杂数学证明'], tip:'写代码或做决策时，多用「让我们一步步思考...」的引导能显著提升质量' },
+  'claude-opus-4-7':   { strengths:'最强 Claude，深度分析+复杂代码+多步推理顶级表现', best:['复杂代码项目','长文撰写','学术分析','战略规划'], avoid:['简单聊天（杀鸡用牛刀，慢且贵）'], tip:'适合一次给出完整背景+明确要求，不要分散提问' },
+  'gpt-5.5':           { strengths:'OpenAI 新一代旗舰，多模态+代码+对话全面提升', best:['复杂任务','多模态分析','代码生成'], avoid:['极简单的查询（用 Mini）'], tip:'⚡ 版本走 deepwl 直连更快' },
+  'gpt-5.5-xhigh':     { strengths:'GPT-5.5 最高推理强度版，深度逻辑分析', best:['数学证明','复杂编程','学术论文','深度推理'], avoid:['闲聊','即时回复场景'], tip:'回答会很慢但思路深；不需要深度推理就别选这个' },
+  'gpt-5.4':           { strengths:'OpenAI 旗舰多模态，工具调用强，深度推理', best:['Agent 任务','多步推理','代码生成','分析图表'], avoid:[], tip:'要分析图表/截图首选 GPT 系' },
+  'gpt-5.4-mini':      { strengths:'快速轻量，性价比高，日常对话首选', best:['日常对话','简单问答','快速翻译','摘要'], avoid:['复杂代码','深度推理'], tip:'省钱省时间的默认选择' },
+  'gpt-5.4-nano':      { strengths:'最轻量，速度最快，几乎实时响应', best:['超快回复','简单分类','短文本处理'], avoid:['任何需要思考的任务'], tip:'用于聊天机器人/客服等高频场景' },
+  'gpt-5.4-xhigh':     { strengths:'GPT-5.4 深度推理版，复杂问题首选', best:['数学题','复杂分析','决策推理'], avoid:['普通问答'], tip:'回答慢但深，重要决策再用' },
+  'gemini-3.1-pro-preview': { strengths:'谷歌旗舰，复杂推理+多模态+1M 上下文', best:['超长文档分析','视频理解','复杂推理','跨模态'], avoid:[], tip:'1M token 上下文窗口适合扔整本书/整个代码库进去问' },
+  'gemini-3.1-flash-lite-preview': { strengths:'极速轻量，性价比之王，秒级响应', best:['快速问答','批量处理','简单生成'], avoid:['深度推理'], tip:'AI Prompt Helper 的默认助手就是它，3 秒出结果' },
+  'gemini-3-flash-preview': { strengths:'快速版 Gemini，平衡速度与质量', best:['对话','内容总结','翻译'], avoid:[], tip:'Pro 太慢、Lite 不够用时的折中' },
+  'grok-4.2':          { strengths:'万亿参数·16 Agent·实时联网，xAI 旗舰', best:['实时新闻分析','网络数据查询','幽默风格写作','技术问题'], avoid:[], tip:'唯一自带 X/Twitter 数据访问的模型，热点话题首选' },
+  'deepseek-v4-pro':   { strengths:'V4 旗舰开源，顶尖推理 + Agent 能力，国产标杆', best:['代码生成','数学推理','中文写作','开源研究'], avoid:[], tip:'代码能力对标 Claude，价格便宜很多' },
+  'deepseek-v3.2':     { strengths:'DeepSeek 上一代，开源旗舰，性价比极高', best:['代码','中文创意','日常推理'], avoid:[], tip:'AI Prompt Helper 推荐选项，写创意 prompt 又快又好' },
+  'glm-5':             { strengths:'智谱 GLM 新一代，中文场景表现优秀', best:['中文写作','文档处理','本土化任务'], avoid:[], tip:'中国法律、政策、文化类问题比 GPT 更准' },
+  'kimi-k2.5':         { strengths:'月之暗面长文本王，200 万字上下文', best:['超长文档总结','论文分析','法律合同审阅'], avoid:['短问答（超慢）'], tip:'⚠ 推理模型，先长时间思考再回答，不要用于快速场景' },
+  'MiniMax-M2.5':      { strengths:'MiniMax 新一代，多模态对话',         best:['对话','内容生成'], avoid:[], tip:'国产备选，价格友好' },
+  'qwen3.5-plus':      { strengths:'通义千问，阿里旗舰，中文+代码强',    best:['中文对话','代码生成','电商场景'], avoid:[], tip:'阿里生态相关任务首选' },
+  'doubao-seed-2-0-pro-260215': { strengths:'豆包 Seed 2.0，256K 上下文 + 多模态 + 联网', best:['长文','联网搜索','多模态'], avoid:[], tip:'字节跳动出品，中文新闻热点强' },
+
+  // ─────── 图片 ───────
+  'grok-4.2-image':    { strengths:'⭐写实+油画质感最强，固定出 2 张',    best:['人物写真','油画风格','写实风景'], avoid:['卡通','文字渲染'], tip:'描述要具体到光线、材质、相机镜头' },
+  'kling-image-o1':    { strengths:'⭐人物一致性最好，像素级改图',         best:['人物 IP 化','保持角色一致','局部修改'], avoid:['艺术风格化'], tip:'同一角色多张图首选' },
+  'kling-v3-omni':     { strengths:'最多 10 张参考图融合，4K 输出',         best:['多元素融合','4K 高清出图','参考图引导'], avoid:[], tip:'上传多张参考图时它最稳' },
+  'doubao-seedream-5-0-260128': { strengths:'⭐多图融合 + 联网生图 + 3K',    best:['复杂场景','需要联网素材','多图融合'], avoid:[], tip:'描述里可以引用真实事件/品牌名，会自动联网找参考' },
+  'doubao-seedream-4-5-251128': { strengths:'多图融合·4K·人脸文字优秀',     best:['人脸保持','文字渲染','4K 出图'], avoid:[], tip:'生成包含中文文字的图片时表现最好' },
+  'gemini-3-pro-image-preview': { strengths:'文字渲染最强，8K 分辨率',     best:['含文字的海报','广告设计','超高清出图'], avoid:[], tip:'招牌、Logo、海报文字这类需求首选' },
+  'gemini-3.1-flash-image-preview': { strengths:'速度版 + 1:4/4:1 超宽比 + 联网生图', best:['快速出图','极端宽高比','需要联网参考'], avoid:[], tip:'横幅 banner 或长图首选' },
+  'gpt-image-1.5-all': { strengths:'语义理解最强，大白话生图',              best:['口语化描述','复杂场景理解','创意构思'], avoid:[], tip:'不会写专业 prompt 时选它，理解能力最强' },
+  'gpt-image-2':       { strengths:'GPT 图像新一代，最强语义+绘画',         best:['复杂场景','文字理解','艺术创作'], avoid:[], tip:'刚发布，效果对标顶级 Midjourney' },
+  'gpt-image-2-guan':  { strengths:'OpenAI 官方直转通道，最稳定',           best:['需要稳定出图','商业用途'], avoid:[], tip:'比普通通道贵但失败率最低' },
+  'mj_imagine':        { strengths:'艺术感最强，支持普通/动漫风格',         best:['艺术插画','动漫风格','概念设计'], avoid:['写实人脸','文字'], tip:'风格化输出无敌，Midjourney 经典' },
+  'wan2.7-image':      { strengths:'最新版 4K，中文语义理解强',             best:['中文场景','4K 出图','本土化内容'], avoid:[], tip:'中文古风/国潮首选' },
+  'wan2.6-image':      { strengths:'风格迁移，中文语义',                    best:['风格迁移','中文场景'], avoid:[], tip:'2.7 不可用时的备选' },
+
+  // ─────── 视频 ───────
+  'veo3.1':            { strengths:'谷歌 Veo 出品，自带 BGM 有声视频',      best:['有声短片','电影感镜头','音画同步'], avoid:[], tip:'⭐唯一自带背景音乐的视频模型' },
+  'veo3.1-lite':       { strengths:'Veo 轻量版，性价比最高',                best:['日常短视频','测试创意'], avoid:[], tip:'先用 Lite 试效果，满意再用标准版' },
+  'kling-v3-omni-shouweizhen': { strengths:'⭐首尾帧主力，有声视频，质量最强', best:['首尾帧控制','有声短片','叙事视频'], avoid:[], tip:'上传起始+结束图，AI 自动补全中间过程' },
+  'kling-v3-video':    { strengths:'文生/图生视频，支持首帧',               best:['通用文生视频','单帧引导'], avoid:[], tip:'最灵活的可灵主力' },
+  'kling-v3-omni-cankao': { strengths:'1-7 张参考图，AI 智能分镜，有声',     best:['多场景叙事','智能分镜'], avoid:[], tip:'上传多张参考图后 AI 自动决定镜头切换' },
+  'kwvideo-v2':        { strengths:'Seedance 2.0，首尾帧+全能参考，按 Token 计费', best:['复杂动作','长镜头','参考图引导'], avoid:[], tip:'字节出品，物理动作真实感最强' },
+  'kwvideo-v2-ref':    { strengths:'1-9 张参考图，风格/元素融合',           best:['风格保持','多元素融合'], avoid:[], tip:'同时给风格图+主体图能很好融合' },
+  'doubao-seedance-1-5-pro-251215': { strengths:'⭐音画质最佳，支持首尾帧',  best:['高品质短片','首尾帧控制'], avoid:[], tip:'综合素质最高的中文视频模型' },
+  'pixverse-v6-shouweizhen': { strengths:'V6 多模态，支持首尾帧',           best:['首尾帧','特效视频'], avoid:[], tip:'特效/转场效果丰富' },
+  'pixverse-c1-shouweizhen': { strengths:'动态特效，首尾帧',                best:['动态特效','创意短视频'], avoid:[], tip:'适合做炫酷特效' },
+  'grok-video-3-data999': { strengths:'快速首帧视频',                       best:['快速生成','简单场景'], avoid:[], tip:'秒出，适合测试创意' },
+  'grok-video-3-plus': { strengths:'最长 30 秒长视频',                      best:['长视频','叙事内容'], avoid:[], tip:'目前可用最长视频时长' },
+  'viduq3':            { strengths:'最长 16 秒，高质量',                     best:['中等时长视频','质量优先'], avoid:[], tip:'Vidu 出品，叙事感强' },
+  'viduq3-cankaosheng':{ strengths:'1-7 张参考图，主体一致性，最长 16 秒',  best:['角色一致','多场景'], avoid:[], tip:'同一角色出现在多个场景' },
+  'grok-videos':       { strengths:'Grok 视频小模型，OpenAI 接口格式',       best:['快速测试','OpenAI 兼容场景'], avoid:[], tip:'API 兼容性好' },
+  'happyhorse-t2v':    { strengths:'阿里 HappyHorse 文生视频',              best:['文生视频','创意场景'], avoid:[], tip:'阿里新出，免参考图' },
+  'happyhorse-i2v':    { strengths:'HappyHorse 图生视频/首帧',              best:['图生视频','首帧控制'], avoid:[], tip:'上传一张图让它动起来' },
+  'happyhorse-r2v':    { strengths:'HappyHorse 多参考图生视频',             best:['多参考融合'], avoid:[], tip:'多张参考图融合生视频' },
+  'happyhorse-video-edit': { strengths:'HappyHorse 视频编辑，改动局部',     best:['局部修改','视频编辑'], avoid:[], tip:'改视频里的某个元素' },
+
+  // ─────── 音频 ───────
+  'music-2.5+':        { strengths:'⭐最强音乐生成，纯音乐/歌曲',            best:['流行歌曲','纯音乐 BGM','人声合成'], avoid:[], tip:'歌曲模式需要填歌词' },
+  'music-2.5':         { strengths:'上一代音乐生成模型',                    best:['日常音乐生成'], avoid:[], tip:'2.5+ 不可用时的备选' },
+  'speech-2.8':        { strengths:'语音合成，支持情绪/音效',                best:['配音','有声书','播客'], avoid:[], tip:'描述里可以加情绪标签如 [开心][愤怒]' },
+  'doubao-tts-2.0':    { strengths:'字节豆包 TTS，自然中文合成',             best:['中文配音','自然朗读'], avoid:[], tip:'中文发音最自然' },
+}
+
+// 把 ⚡ 变体的 guide 指向主 ID
+;[...CHAT_MODELS,...IMAGE_MODELS,...VIDEO_MODELS].forEach(m => {
+  if (m.apiId && !MODEL_GUIDES[m.id] && MODEL_GUIDES[m.apiId]) {
+    MODEL_GUIDES[m.id] = MODEL_GUIDES[m.apiId]
+  }
+})
 
 // ── Markdown renderer (basic) ──────────────────────────────────────────────
 // Robust JSON parser for LLM output — handles markdown wrappers, trailing junk,
@@ -2311,6 +2456,7 @@ createApp({
     })
 
     const selectedModel = computed(() => ALL_MODELS_MAP[selectedModelId.value] || null)
+    const currentGuide = computed(() => MODEL_GUIDES[selectedModelId.value] || null)
 
     const refTypeOptions = computed(() => {
       if (activeCategory.value === 'video') return ['首帧','尾帧','参考图']
@@ -3169,7 +3315,7 @@ createApp({
     })
 
     return {
-      activeCategory, selectedModelId, selectedModel, categories, currentModels, categoryLabel,
+      activeCategory, selectedModelId, selectedModel, currentGuide, categories, currentModels, categoryLabel,
       chatMessages, chatStreaming, chatSystem, isLoading, loadingModels, generations, currentGenerations,
       CHAT_MODELS, multiMode, multiModels, multiSummarizer, multiLoading, multiLoadingText, chatPriority,
       aiHelperOpen, aiHelperIdea, aiHelperModel, aiHelperLoading, aiWritePrompt,
