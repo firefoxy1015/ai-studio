@@ -307,7 +307,10 @@ async def _stream_deepwl(req: ChatRequest):
                 break
             try:
                 d = json.loads(s)
-                delta = d.get("choices", [{}])[0].get("delta", {}) or {}
+                choices = d.get("choices") or []
+                if not choices:
+                    continue  # final usage-only chunk has empty choices[]
+                delta = choices[0].get("delta") or {}
                 text = delta.get("content")
                 if text:
                     got_content = True
