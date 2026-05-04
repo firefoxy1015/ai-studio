@@ -277,14 +277,20 @@ async def _stream_lingkeai(req: ChatRequest):
 
 
 async def _stream_deepwl(req: ChatRequest):
-    """Call deepwl OpenAI-compatible streaming chat."""
+    """Call deepwl OpenAI-compatible streaming chat.
+
+    Some deepwl models (Kimi K2.5, GPT-5.x reasoning) return a long
+    reasoning_content stream first and only emit the final answer in
+    delta.content at the end. We stream content normally, but keep
+    reasoning_content as a fallback in case the model never emits content."""
     msgs = []
     if req.system:
         msgs.append({"role": "system", "content": req.system})
     for m in req.messages:
         msgs.append({"role": m.role, "content": m.content})
     body = {"model": req.model, "messages": msgs, "stream": True}
-    got_text = False
+    got_content = False
+    reasoning_buf = []
     async with http().stream(
         "POST", f"{DEEPWL_BASE}/v1/chat/completions",
         headers={"Authorization": f"Bearer {DEEPWL_KEY}", "Content-Type": "application/json"},
@@ -301,14 +307,25 @@ async def _stream_deepwl(req: ChatRequest):
                 break
             try:
                 d = json.loads(s)
-                text = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                delta = d.get("choices", [{}])[0].get("delta", {}) or {}
+                text = delta.get("content")
                 if text:
-                    got_text = True
+                    got_content = True
                     yield f"data: {json.dumps({'text': text})}\n\n"
+                else:
+                    rc = delta.get("reasoning_content")
+                    if rc:
+                        reasoning_buf.append(rc)
             except json.JSONDecodeError:
                 pass
-    if not got_text:
-        raise Exception("deepwl returned empty response")
+    if not got_content:
+        # Reasoning model that never emitted content — surface the reasoning
+        # text as the answer so the user gets something useful.
+        fallback = "".join(reasoning_buf).strip()
+        if fallback:
+            yield f"data: {json.dumps({'text': fallback})}\n\n"
+        else:
+            raise Exception("deepwl returned empty response")
     yield "data: [DONE]\n\n"
 
 
@@ -353,13 +370,16 @@ async def chat_sync(req: ChatRequest):
         if not LINGKEAI_MODEL_IDS.get(req.model):
             raise HTTPException(400, detail=f"模型 {req.model} 暂不支持")
     full = ""
-    gen = _stream_deepwl(req) if req.source == "deepwl" else _stream_lingkeai(req)
-    async for chunk in gen:
-        if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
-            try:
-                full += json.loads(chunk[6:].strip()).get("text", "")
-            except Exception:
-                pass
+    try:
+        gen = _stream_deepwl(req) if req.source == "deepwl" else _stream_lingkeai(req)
+        async for chunk in gen:
+            if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                try:
+                    full += json.loads(chunk[6:].strip()).get("text", "")
+                except Exception:
+                    pass
+    except Exception as e:
+        raise HTTPException(503, detail=f"模型调用失败: {str(e)[:200]}")
     if not full:
         raise HTTPException(503, detail="返回空响应")
     return {"text": full}
