@@ -120,6 +120,7 @@ def _encode_lingkeai_token() -> str:
 class Message(BaseModel):
     role: str
     content: str
+    images: Optional[List[str]] = None  # 多模态附件 URL（仅 chat 用，可选）
 
 
 class ChatRequest(BaseModel):
@@ -219,7 +220,11 @@ def _lingkeai_body(req: ChatRequest, model_id: int) -> tuple[dict, dict]:
         parts.append(f"[System: {req.system}]")
     for m in req.messages:
         role = "Human" if m.role == "user" else "Assistant"
-        parts.append(f"{role}: {m.content}")
+        line = f"{role}: {m.content}"
+        if m.images:
+            # lingkeai 不支持多模态结构，把图片 URL 嵌入文本
+            line += "\n[附件图片/文件]\n" + "\n".join(m.images)
+        parts.append(line)
     user_msg = "\n".join(parts)
     group_id = f"group_{LINGKEAI_USER_ID}_{int(time.time() * 1000)}"
     headers = {
@@ -287,7 +292,16 @@ async def _stream_deepwl(req: ChatRequest):
     if req.system:
         msgs.append({"role": "system", "content": req.system})
     for m in req.messages:
-        msgs.append({"role": m.role, "content": m.content})
+        if m.images:
+            # OpenAI 多模态：content 变成 array
+            parts: List[Dict[str, Any]] = []
+            if m.content:
+                parts.append({"type": "text", "text": m.content})
+            for url in m.images:
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+            msgs.append({"role": m.role, "content": parts})
+        else:
+            msgs.append({"role": m.role, "content": m.content})
     body = {"model": req.model, "messages": msgs, "stream": True}
     got_content = False
     reasoning_buf = []

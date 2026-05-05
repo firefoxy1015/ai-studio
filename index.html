@@ -654,7 +654,16 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="chat-messages">
           <template v-for="(msg,i) in chatMessages" :key="i">
             <div v-if="!msg.multi" :class="['msg', msg.role]">
-              <div class="msg-bubble" v-html="renderMd(msg.content)"></div>
+              <div class="msg-bubble">
+                <div v-if="msg.attachments && msg.attachments.length" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+                  <a v-for="(a,ai) in msg.attachments" :key="ai" :href="a.url" target="_blank"
+                     style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.25);border-radius:8px;font-size:12px;color:#c084fc;text-decoration:none">
+                    <img v-if="/\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(a.url)" :src="a.url" style="width:32px;height:32px;object-fit:cover;border-radius:4px" />
+                    <span>{{ a.kind || '附件' }} {{ a.name }}</span>
+                  </a>
+                </div>
+                <div v-html="renderMd(msg.content)"></div>
+              </div>
             </div>
             <div v-else class="msg assistant multi-result">
               <div class="multi-grid">
@@ -1277,6 +1286,25 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         </button>
       </div>
 
+      <!-- Chat attachments -->
+      <div class="input-refs" v-if="activeCategory==='chat'">
+        <div v-for="(a,ai) in chatAttachments" :key="ai" class="ref-chip">
+          <img v-if="a.url && /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(a.url)" :src="a.url" style="width:24px;height:24px;object-fit:cover;border-radius:4px;margin-right:4px" />
+          <span class="ref-chip-type">{{ a.kind || '附件' }}</span>
+          <span class="ref-chip-name">{{ a.name }}</span>
+          <span class="ref-chip-del" @click="chatAttachments.splice(ai,1)">×</span>
+        </div>
+        <input type="file" ref="chatFileInput" style="display:none" multiple
+               accept="image/*,.pdf,.txt,.md,.doc,.docx,.csv,.json"
+               @change="onChatFileSelected" />
+        <button class="add-ref-btn" @click="$refs.chatFileInput.click()" :disabled="chatUploading">
+          📎 {{ chatUploading ? '上传中...' : '上传图片/文件' }}
+        </button>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px" v-if="chatAttachments.length">
+          ⚠ 仅 GPT/Gemini/Claude 等多模态模型能看图
+        </span>
+      </div>
+
       <!-- Prompt + send -->
       <div class="input-row">
         <div class="textarea-wrap">
@@ -1815,6 +1843,9 @@ createApp({
     const deepThink = ref(false)
     const lyricsText = ref('')
     const refs = ref([])
+    const chatAttachments = ref([])  // 聊天多模态附件 [{url, name, kind}]
+    const chatFileInput = ref(null)
+    const chatUploading = ref(false)
     const paramRatio = ref('9:16')
     const paramDuration = ref('5')
     const paramMode = ref('pro')
@@ -2625,8 +2656,13 @@ createApp({
     async function sendChat() {
       const modelId = selectedModelId.value
       const text = promptText.value.trim()
-      chatMessages.value.push({ role:'user', content: text })
+      const imgs = chatAttachments.value.map(a => a.url)
+      const userMsg = { role:'user', content: text }
+      if (imgs.length) userMsg.images = imgs
+      if (chatAttachments.value.length) userMsg.attachments = chatAttachments.value.map(a => ({...a}))
+      chatMessages.value.push(userMsg)
       promptText.value = ''
+      chatAttachments.value = []
       chatStreaming.value = '...'
       loadingModels[modelId] = true
 
@@ -2641,7 +2677,11 @@ createApp({
           body: JSON.stringify({
             model: _m.apiId || modelId,
             source: _m.source || null,
-            messages: chatMessages.value,
+            messages: chatMessages.value.map(m => {
+              const o = { role:m.role, content:m.content }
+              if (m.images) o.images = m.images
+              return o
+            }),
             system: chatSystem.value || null,
             web_search: webSearch.value,
             enable_thinking: deepThink.value,
@@ -3034,6 +3074,32 @@ createApp({
       showRefModal.value = false
     }
 
+    async function onChatFileSelected(e) {
+      const files = Array.from(e.target.files || [])
+      if (!files.length) return
+      chatUploading.value = true
+      try {
+        for (const file of files) {
+          const fd = new FormData()
+          fd.append('file', file)
+          const r = await fetch('/api/upload', { method:'POST', body:fd })
+          if (!r.ok) throw new Error('HTTP '+r.status)
+          const d = await r.json()
+          const isImg = /^image\//.test(file.type)
+          chatAttachments.value.push({
+            url: d.url,
+            name: (d.name || file.name).slice(0,30),
+            kind: isImg ? '🖼️ 图片' : '📄 文件',
+          })
+        }
+      } catch(err) {
+        alert('上传失败：'+err.message)
+      } finally {
+        chatUploading.value = false
+        e.target.value = ''
+      }
+    }
+
     async function onFileSelected(e) {
       const file = e.target.files[0]
       if (!file) return
@@ -3325,6 +3391,7 @@ createApp({
       directorModal, directorRegen, directorUse,
       ratioOptions, durationOptions, balanceText, historyEl, promptEl,
       showRefModal, refModalUrl, refModalType, fileInput, lightboxUrl,
+      chatAttachments, chatFileInput, chatUploading, onChatFileSelected,
       refTypeOptions, inputPlaceholder,
       switchCategory, selectModel, modelById, submit, rerun, addRef, onFileSelected, openLightbox,
       autoResize, renderMd, removeGeneration, removeWork, clearWorks,
